@@ -1,30 +1,32 @@
 <script setup lang="ts">
-// import {useMouse, useRafFn} from "@vueuse/core";
+import {motion} from "motion-v";
+let lastX = 0;
+let lastY = 0;
+const speedX = ref(0);
+const speedY = ref(0);
 
 const {x, y} = useMouse();
-const deltaX = ref(0);
-watch(x, (newX, oldX) => {
-  deltaX.value = newX - oldX;
+
+useRafFn(({delta}) => {
+  const newX = x.value;
+  const newY = y.value;
+  speedX.value = (newX - lastX) / delta;
+  speedY.value = (newY - lastY) / delta;
+  lastX = newX;
+  lastY = newY;
 });
-
-// const speedX = ref(0);
-
-// useRafFn(
-//   ({delta}) => {
-//     // console.log("raf delta", deltaX.value / delta);
-//     speedX.value = deltaX.value / delta;
-//   },
-//   {
-//     fpsLimit: 60,
-//   }
-// );
 </script>
 
 <template>
   <div class="h-screen flex items-center justify-center">
-    <div class="w-25 aspect-square outline-amber-300 outline-2">
-      pos: {{ x }}, {{ y }}
-    </div>
+    <motion.div
+      class="w-25 aspect-square outline-amber-300 outline-2"
+      :style="{
+        x: speedX + 'px',
+        y: speedY + 'px',
+      }"
+      :animate="['x', 'y']"
+    />
   </div>
 </template>
 
