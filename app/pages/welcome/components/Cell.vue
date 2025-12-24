@@ -1,5 +1,23 @@
 <script setup lang="ts">
 import {motion} from "motion-v";
+
+interface Props {
+  index: number;
+  src: string;
+  size: number;
+}
+
+const props = defineProps<Props>();
+
+const position = computed(() => {
+  const row = Math.floor(props.index / props.size);
+  const col = props.index % props.size;
+  return {
+    left: `-${(col * 400) / props.size}px`,
+    top: `-${(row * 400) / props.size}px`,
+  };
+});
+
 let lastX = 0;
 let lastY = 0;
 const speedX = ref(0);
@@ -36,16 +54,20 @@ useRafFn(({delta}) => {
 </script>
 
 <template>
-  <motion.div
-    ref="el"
-    class="w-25 aspect-square outline-amber-300 outline-2"
-    :animate="{
-      x: speedX,
-      y: speedY,
-    }"
-    :transition="{type: 'spring', stiffness: 300, damping: 30}"
-    >{{ inRange }}</motion.div
-  >
+  <div class="w-25 aspect-square relative overflow-hidden" ref="el">
+    <motion.div
+      class="w-[400%] aspect-square bg-cover absolute"
+      :style="{
+        backgroundImage: `url('${src}')`,
+        ...position,
+      }"
+      :animate="{
+        x: speedX,
+        y: speedY,
+      }"
+      :transition="{type: 'spring', stiffness: 300, damping: 30}"
+    />
+  </div>
 </template>
 
 <style scoped></style>
