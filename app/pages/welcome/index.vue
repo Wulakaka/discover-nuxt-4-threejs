@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Background from "./components/Background.vue";
 import Cell from "./components/Cell.vue";
 
 const img = useImage();
@@ -17,6 +18,7 @@ const imgUrl = img("/image.jpg", {width: 400, height: 400});
         :size="4"
       />
     </div>
+    <Background />
   </div>
 </template>
 
