@@ -54,7 +54,7 @@ useRafFn(({delta}) => {
 </script>
 
 <template>
-  <div class="w-25 aspect-square relative overflow-hidden" ref="el">
+  <div ref="el" class="w-25 aspect-square relative overflow-hidden">
     <motion.div
       class="w-[400%] aspect-square bg-cover absolute"
       :style="{
@@ -65,7 +65,7 @@ useRafFn(({delta}) => {
         x: speedX,
         y: speedY,
       }"
-      :transition="{type: 'spring', stiffness: 300, damping: 30}"
+      :transition="{type: 'spring', stiffness: 300, damping: 10}"
     />
   </div>
 </template>
