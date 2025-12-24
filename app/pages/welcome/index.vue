@@ -4,7 +4,7 @@ import Cell from "./components/Cell.vue";
 
 const img = useImage();
 
-const imgUrl = img("/image.jpg", {width: 400, height: 400});
+const imgUrl = img("/image2.jpeg", {width: 400, height: 400});
 </script>
 
 <template>
@@ -16,9 +16,10 @@ const imgUrl = img("/image.jpg", {width: 400, height: 400});
         :index="index"
         :src="imgUrl"
         :size="4"
+        :imageSize="400"
       />
     </div>
-    <Background />
+    <!-- <Background /> -->
   </div>
 </template>
 

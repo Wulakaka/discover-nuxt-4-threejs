@@ -5,6 +5,7 @@ interface Props {
   index: number;
   src: string;
   size: number;
+  imageSize: number;
 }
 
 const props = defineProps<Props>();
@@ -13,8 +14,8 @@ const position = computed(() => {
   const row = Math.floor(props.index / props.size);
   const col = props.index % props.size;
   return {
-    left: `-${(col * 400) / props.size}px`,
-    top: `-${(row * 400) / props.size}px`,
+    left: `-${(col * props.imageSize) / props.size}px`,
+    top: `-${(row * props.imageSize) / props.size}px`,
   };
 });
 
@@ -54,11 +55,18 @@ useRafFn(({delta}) => {
 </script>
 
 <template>
-  <div ref="el" class="w-25 aspect-square relative overflow-hidden">
+  <div
+    ref="el"
+    class="aspect-square relative overflow-hidden"
+    :style="{
+      width: `${imageSize / size}px`,
+    }"
+  >
     <motion.div
-      class="w-[400%] aspect-square bg-cover absolute"
+      class="aspect-square bg-cover absolute"
       :style="{
         backgroundImage: `url('${src}')`,
+        width: `${size * 100}%`,
         ...position,
       }"
       :animate="{
