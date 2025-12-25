@@ -3,6 +3,8 @@ import Background from "./components/Background.vue";
 import Cell from "./components/Cell.vue";
 import VueLogo from "./components/VueLogo.vue";
 
+const enabled = ref(false);
+
 // const img = useImage();
 
 // const imgUrl = img("/image2.jpeg", {width: 400, height: 400});
@@ -23,6 +25,13 @@ import VueLogo from "./components/VueLogo.vue";
         <VueLogo class="w-100" />
       </Cell>
     </div>
+    <FluidCursor
+      v-if="enabled"
+      :splat-radius="0.2"
+      :color-update-speed="3"
+      :velocity-dissipation="3"
+      :sim-resolution="64"
+    />
   </div>
 </template>
 
