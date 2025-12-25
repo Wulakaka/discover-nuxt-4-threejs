@@ -9,8 +9,9 @@ import VueLogo from "./components/VueLogo.vue";
 </script>
 
 <template>
-  <div class="h-screen w-screen flex items-center justify-center">
-    <div class="grid grid-cols-4 grid-rows-4 absolute z-1">
+  <div class="h-screen w-screen flex items-center justify-center bg-black">
+    <Background class="z-1" />
+    <div class="grid grid-cols-4 grid-rows-4 absolute z-0">
       <Cell
         v-for="(n, index) in 16"
         :key="n"
@@ -22,7 +23,6 @@ import VueLogo from "./components/VueLogo.vue";
         <VueLogo class="w-100" />
       </Cell>
     </div>
-    <Background class="z-0" />
   </div>
 </template>
 

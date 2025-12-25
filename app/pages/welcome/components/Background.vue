@@ -7,7 +7,7 @@ useBackground(refCanvas);
 </script>
 
 <template>
-  <div class="absolute inset-0 bg-black">
+  <div class="absolute inset-0">
     <canvas ref="refCanvas" class="w-full h-full" />
   </div>
 </template>
