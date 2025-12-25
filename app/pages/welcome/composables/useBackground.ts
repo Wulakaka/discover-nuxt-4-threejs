@@ -1,8 +1,13 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
 import {
+  color,
   Fn,
+  mix,
+  mul,
   mx_noise_float,
+  oscSine,
   positionLocal,
+  rand,
   time,
   uv,
   vec2,
@@ -45,24 +50,56 @@ export function useBackground(ref: Ref<HTMLCanvasElement | null>) {
      * Material
      */
 
-    const colorNode = Fn(() => {
-      const uvX = uv().x.sub(0.5).div(uv().y.add(0.1)).add(0.5).mul(20);
-      const uvY = uv()
-        .y.mul(0.75)
-        .div(uv().y.add(1).mul(0.25))
-        .sub(time.mul(0.4));
+    // 光效果
+    const lightStrength = Fn(() => {
+      const uvX = uv().x.sub(0.5).div(uv().y.add(0.1)).add(0.5).mul(10);
+      const uvY = uv().y.sub(0.5).div(uv().y.add(0.1)).add(0.5).mul(0.5);
+      // 增加时间变化
+      uvY.subAssign(time.mul(0.4));
+
       const strength = mx_noise_float(vec2(uvX, uvY));
-      strength.step(0);
-      return vec4(1, 1, 1, strength);
+      strength.smoothstepAssign(-0.5, 0.5);
+      // const strength = uvX.fract();
+      return strength;
+    });
+
+    // 水波效果
+    const waveStrength = Fn(() => {
+      const uvX = uv().x.add(0.5).mul(3);
+      const uvY = uv()
+        .y.add(oscSine(time.mul(0.05)))
+        .mul(5);
+      const wave = mx_noise_float(vec3(uvX, uvY, time));
+      wave.smoothstepAssign(-1, 1);
+      return wave;
+    });
+
+    // 颗粒效果
+    const grainStrength = Fn(() => {
+      const uvX = uv().x.mul(10);
+      const uvY = uv().y.mul(-10);
+
+      return rand(vec2(uvX, uvY));
+    });
+
+    const colorNode = Fn(() => {
+      const light = lightStrength();
+      const wave = waveStrength();
+
+      // 灰色
+      const color1 = color("#34495e");
+      // 绿色
+      const color2 = color("#41b883");
+
+      const c = mix(color1.rgb, color2.rgb, light.remap(0.4, 1));
+
+      const strength = mul(light, wave, grainStrength(), 0.5);
+
+      return vec4(c, strength);
     });
 
     const positionNode = Fn(() => {
-      const x = positionLocal.x;
-      const y = positionLocal.y;
-      const z = positionLocal.z;
-      // x.mulAssign(float(1).add(y));
-      // y.addAssign(y.sub(-1).pow(2));
-      return vec3(x, y, z);
+      return positionLocal;
     });
 
     const material = new MeshBasicNodeMaterial({
