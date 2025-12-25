@@ -112,8 +112,8 @@ export function useBackground(ref: Ref<HTMLCanvasElement | null>) {
     /**
      * Mesh
      */
-    const box = new Mesh(geometry, material);
-    scene.add(box);
+    const mesh = new Mesh(geometry, material);
+    scene.add(mesh);
 
     /**
      * Sizes
@@ -148,7 +148,7 @@ export function useBackground(ref: Ref<HTMLCanvasElement | null>) {
       100
     );
     // camera.position.y = 5;
-    camera.position.z = 2;
+    camera.position.z = 0.4;
     scene.add(camera);
 
     // Controls
@@ -173,7 +173,7 @@ export function useBackground(ref: Ref<HTMLCanvasElement | null>) {
        */
       renderer.setAnimationLoop(() => {
         // Update controls
-        controls.update();
+        // controls.update();
 
         // Render
         renderer.render(scene, camera);

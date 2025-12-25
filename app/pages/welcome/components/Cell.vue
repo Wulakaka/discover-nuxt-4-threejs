@@ -3,7 +3,7 @@ import {motion} from "motion-v";
 
 interface Props {
   index: number;
-  src: string;
+  src?: string;
   size: number;
   imageSize: number;
 }
@@ -74,7 +74,9 @@ useRafFn(({delta}) => {
         y: speedY,
       }"
       :transition="{type: 'spring', stiffness: 300, damping: 10}"
-    />
+    >
+      <slot />
+    </motion.div>
   </div>
 </template>
 
