@@ -1,4 +1,5 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
+import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 import {
   abs,
   color,
@@ -8,28 +9,23 @@ import {
   mx_noise_vec3,
   normalLocal,
   normalView,
-  oscTriangle,
   PI2,
   positionLocal,
   positionViewDirection,
   rotate,
   sin,
   smoothstep,
-  step,
   time,
-  uv,
+  uniform,
   vec3,
 } from "three/tsl";
 import {
-  AmbientLight,
-  DirectionalLight,
+  Color,
   Mesh,
   MeshBasicNodeMaterial,
-  MeshStandardNodeMaterial,
   PerspectiveCamera,
   Scene,
   SphereGeometry,
-  TorusGeometry,
   WebGPURenderer,
 } from "three/webgpu";
 
@@ -44,6 +40,24 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   });
 
   function init(canvas: HTMLCanvasElement) {
+    /**
+     * gui
+     */
+    const gui = new GUI();
+
+    // uniforms
+    const coreColor = uniform(new Color("#00ffff"));
+
+    const fresnelColor = uniform(new Color("#00aaff"));
+    const fresnelStrength = uniform(0.1);
+
+    const uTintColor = uniform(new Color("#00ffff"));
+
+    gui.addColor(coreColor, "value").name("电流核心颜色");
+    gui.addColor(fresnelColor, "value").name("Fresnel 颜色");
+    gui.add(fresnelStrength, "value", 0, 1, 0.01).name("Fresnel 强度");
+    gui.addColor(uTintColor, "value").name("电流色散基础色");
+
     // Scene
     const scene = new Scene();
 
@@ -67,7 +81,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const safeTime = time.mod(600.0);
     // 周期性时间 0 - 2PI
     const periodicTime = time.mod(PI2);
-    // 心跳效果 0.93 - 1.07
+    // 心跳效果 0.93 - 1.07，只影响明暗变化
     const pulse = sin(periodicTime.mul(1.0)).mul(0.07).add(1.0);
 
     // 放缓时间
@@ -116,29 +130,29 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const pulsedElectricity = electricityColor.mul(pulse);
 
-    // 高光效果
+    // highlight 效果
     const coreMask = smoothstep(0.96, 1.0, elecG);
+    // fresnel
+    // 使用指数为了让 fresnel 更集中
     const fresnel = dot(viewDir, normal).oneMinus().pow(1.1);
+
     // 分层
     let finalColor = color("#000000");
-    const cyanColor = color("#00ffff").mul(0.3);
-    finalColor = finalColor.add(cyanColor.mul(pulsedElectricity));
+    // 色调
+    // 乘以 0.3 是为了让周围颜色更暗一些，突出核心
+    const tintColor = uTintColor.mul(0.3);
+    // 四维向量相乘的效果是各个分量分别相乘
+    finalColor = finalColor.add(tintColor.mul(pulsedElectricity));
 
-    const whiteColor = color("#00ffff").mul(10.0);
+    const whiteColor = coreColor.mul(10.0);
     finalColor = mix(finalColor, whiteColor, coreMask);
 
     // 制作 fresnel 高光
     finalColor = finalColor.add(
-      color("#00aaff").mul(0.0).mul(fresnel).mul(pulse)
+      fresnelColor.mul(fresnel).mul(fresnelStrength).mul(pulse)
     );
 
     const opacity = elecG.add(fresnel).smoothstep(0.3, 0.7);
-
-    // 颜色基调
-    const tintColor = color("#00ffff");
-    const baseColor = tintColor.mul(pulsedElectricity);
-
-    const baseOpacity = elecG.smoothstep(0.3, 0.7);
 
     const material = new MeshBasicNodeMaterial({
       colorNode: finalColor,
@@ -219,6 +233,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       material.dispose();
       controls.dispose();
       renderer.dispose();
+      gui.destroy();
     }
 
     return dispose;
