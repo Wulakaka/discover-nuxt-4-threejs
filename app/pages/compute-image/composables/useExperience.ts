@@ -1,15 +1,35 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
 import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 import {Fn} from "three/src/nodes/TSL.js";
-import {instancedArray, instanceIndex, texture, vec2} from "three/tsl";
+import type {float} from "three/tsl";
 import {
+  abs,
+  distance,
+  If,
+  deltaTime,
+  instancedArray,
+  instanceIndex,
+  Loop,
+  PI,
+  positionLocal,
+  rotate,
+  texture,
+  uniformArray,
+  vec2,
+  vec3,
+} from "three/tsl";
+
+import {
+  Mesh,
+  MeshBasicNodeMaterial,
   PerspectiveCamera,
+  PlaneGeometry,
   Scene,
-  Sprite,
-  SpriteNodeMaterial,
   TextureLoader,
+  Vector2,
   WebGPURenderer,
 } from "three/webgpu";
+import gsap from "gsap";
 
 export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   let disposeFn: (() => void) | null = null;
@@ -28,12 +48,18 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     // Scene
     const scene = new Scene();
 
-    const size = 32;
+    // TSL
+    const size = 4;
     const count = Math.pow(size, 2);
+
+    const points: Vector2[] = [];
+    const uPoints = uniformArray([new Vector2(0.5, 0.5)], "vec2");
 
     const positionBuffer = instancedArray(count, "vec3");
 
     const colorBuffer = instancedArray(count, "vec4");
+
+    const progressBuffer = instancedArray(count, "float");
 
     const initCompute = Fn(() => {
       // position
@@ -50,20 +76,64 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       // color
       const color = colorBuffer.element(instanceIndex);
       color.assign(texture(image, newUv));
+
+      // progress
+      const progress = progressBuffer.element(instanceIndex);
+      progress.assign(0);
+    })().compute(count);
+
+    const updateCompute = Fn(() => {
+      // position
+      const pos = positionBuffer.element(instanceIndex);
+
+      const col = instanceIndex.mod(size).toFloat();
+      const row = instanceIndex.div(size).toFloat();
+      const newUv = vec2(col.div(size - 1), row.div(size - 1));
+      // color
+      const color = colorBuffer.element(instanceIndex);
+      color.assign(texture(image, newUv));
+
+      // progress
+      const progress = progressBuffer.element(instanceIndex);
+      progress.assign(progress.add(deltaTime.mul(0.1)).min(1));
+
+      // const strength = float(0);
+
+      // const l = uPoints.length();
+
+      Loop(1, ({i}) => {
+        const point = uPoints.element(i);
+        const dist = distance(pos.xy, point);
+        If(abs(dist.sub(deltaTime)).lessThan(0.1), () => {
+          progress.assign(0);
+        });
+      });
     })().compute(count);
 
     /**
      * Material
      */
-    const material = new SpriteNodeMaterial({
-      positionNode: positionBuffer.toAttribute(),
-      colorNode: colorBuffer.toAttribute(),
+    const posLocal = Fn(([progress]: [ReturnType<typeof float>]) => {
+      const p = rotate(positionLocal, vec3(0, progress.mul(PI), 0));
+
+      return p;
     });
 
-    const sprite = new Sprite(material);
-    sprite.count = count;
+    const progress = progressBuffer.toAttribute();
 
-    scene.add(sprite);
+    const material = new MeshBasicNodeMaterial({
+      positionNode: positionBuffer.toAttribute().add(posLocal(progress)), // 必须叠加 positionLocal
+      colorNode: colorBuffer.toAttribute(),
+      side: 2,
+    });
+
+    const geometry = new PlaneGeometry(1, 1);
+
+    const mesh = new Mesh(geometry, material);
+    mesh.count = count;
+    // mesh.frustumCulled = false;
+
+    scene.add(mesh);
 
     /**
      * Sizes
@@ -73,7 +143,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       height: window.innerHeight,
     };
 
-    window.addEventListener("resize", () => {
+    const resizeHandler = () => {
       // Update sizes
       sizes.width = window.innerWidth;
       sizes.height = window.innerHeight;
@@ -85,7 +155,27 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       // Update renderer
       renderer.setSize(sizes.width, sizes.height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    });
+    };
+
+    window.addEventListener("resize", resizeHandler);
+
+    /**
+     * Click
+     */
+    const clickHandler = () => {
+      points.push(new Vector2(Math.random(), Math.random()));
+      const progress = {
+        value: 0,
+      };
+      gsap.to(progress, {
+        value: 1,
+        duration: 5,
+        onComplete: () => {
+          points.pop();
+        },
+      });
+    };
+    window.addEventListener("click", clickHandler);
 
     /**
      * Camera
@@ -133,14 +223,18 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       controls.update();
 
       // Render
-      // renderer.compute(initCompute);
+      renderer.compute(updateCompute);
       renderer.render(scene, camera);
     }
 
     function dispose() {
+      geometry.dispose();
       material.dispose();
       controls.dispose();
       renderer.dispose();
+
+      window.removeEventListener("resize", resizeHandler);
+      window.removeEventListener("click", clickHandler);
     }
 
     return dispose;
