@@ -1,8 +1,8 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
 import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 import {Fn} from "three/src/nodes/TSL.js";
-import type {float} from "three/tsl";
 import {
+  float,
   distance,
   If,
   deltaTime,
@@ -17,7 +17,7 @@ import {
   vec2,
   vec3,
   uniform,
-  abs,
+  sin,
 } from "three/tsl";
 
 import {
@@ -27,6 +27,7 @@ import {
   PlaneGeometry,
   Scene,
   TextureLoader,
+  Vector2,
   WebGPURenderer,
 } from "three/webgpu";
 
@@ -42,20 +43,32 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
   async function init(canvas: HTMLCanvasElement) {
     const textureLoader = new TextureLoader();
-    const image = textureLoader.load("/image2.jpeg");
+    const image = textureLoader.load("/image.jpg");
 
     // Scene
     const scene = new Scene();
 
+    const meshSize = 30;
+
+    const maxPoints = 50;
+
     // TSL
-    const size = 40;
+    const size = 100;
     const count = Math.pow(size, 2);
 
-    const uActiveTime = uniformArray(Array(count).fill(0), "float");
+    const activeList: Vector2[] = Array(maxPoints)
+      .fill(null)
+      .map(() => new Vector2(count + 1, 0));
+    let fillIndex = -1;
+    const uActiveList = uniformArray(activeList, "vec2");
+
+    const uActiveListLength = uniform(uActiveList.array.length, "uint");
 
     const uTime = uniform(performance.now() * 0.001, "float");
 
     const positionBuffer = instancedArray(count, "vec3");
+
+    const rotationBuffer = instancedArray(count, "vec3");
 
     const colorBuffer = instancedArray(count, "vec4");
 
@@ -70,8 +83,10 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       pos.x.assign(col.sub(size / 2).add(0.5));
       pos.y.assign(row.sub(size / 2).add(0.5));
       const newUv = vec2(col.div(size - 1), row.div(size - 1));
-      // const distance = newUv.length();
-      // pos.z.assign(sin(distance.add(time).mul(5)));
+
+      // rotation
+      const rot = rotationBuffer.element(instanceIndex);
+      rot.assign(vec3(0, 0, 0));
 
       // color
       const color = colorBuffer.element(instanceIndex);
@@ -86,6 +101,10 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       // position
       // const pos = positionBuffer.element(instanceIndex);
 
+      // rotation
+      const rot = rotationBuffer.element(instanceIndex);
+      const baseRotation = vec3(0, 0, 0);
+
       const col = instanceIndex.mod(size).toFloat();
       const row = instanceIndex.div(size).toFloat();
       const newUv = vec2(col.div(size - 1), row.div(size - 1));
@@ -96,45 +115,74 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       // progress
       const progress = progressBuffer.element(instanceIndex);
 
-      Loop(count, ({i}) => {
-        const activeTime = uActiveTime.element(i);
-        If(activeTime.greaterThan(0), () => {
+      progress.assign(
+        progress.add(deltaTime.mul(0.1).div(meshSize / size)).clamp(0, 1)
+      );
+
+      Loop(uActiveListLength, ({i}) => {
+        const activeItem = uActiveList.element(i);
+
+        const activeIndex = activeItem.x.toVar();
+        If(activeIndex.lessThan(count), () => {
+          const activeTime = activeItem.y.toVar();
           const activeUv = vec2(
-            i
+            activeIndex
               .mod(size)
               .toFloat()
               .div(size - 1),
-            i
+            activeIndex
               .div(size)
               .toFloat()
               .div(size - 1)
           );
           const dist = distance(newUv, activeUv);
-          const velocity = 0.5;
+          const velocity = float(0.5);
           const waveDist = uTime.sub(activeTime).mul(velocity);
 
-          If(abs(waveDist.sub(dist)).lessThan(0.1), () => {
-            progress.subAssign(1);
+          const diff = waveDist.sub(dist);
+
+          progress.addAssign(diff.clamp(0, 1));
+          const toPoint = activeUv.sub(newUv);
+
+          If(toPoint.length().greaterThan(0.0), () => {
+            const toPointDir = toPoint.normalize();
+            baseRotation.addAssign(vec3(toPointDir.xy, 0));
           });
         });
       });
 
-      progress.assign(progress.add(deltaTime.mul(0.2)).clamp(0, 1));
+      If(baseRotation.length().equal(0.0), () => {
+        baseRotation.assign(vec3(0, 1, 0));
+      });
+
+      rot.assign(rotate(baseRotation.normalize(), vec3(0, 0, 0)));
     })().compute(count);
 
     /**
      * Material
      */
-    const posLocal = Fn(([progress]: [ReturnType<typeof float>]) => {
-      const p = rotate(positionLocal, vec3(0, progress.mul(PI), 0));
+    const posLocal = Fn(
+      ([progress, rotation]: [
+        ReturnType<typeof float>,
+        ReturnType<typeof vec3>
+      ]) => {
+        const p = positionLocal.toVar();
+        // p.assign(rotate(positionLocal, vec3(0, progress.mul(PI), 0)));
+        p.assign(rotate(p, vec3(1, 1, 1).mul(PI).mul(progress)));
+        // 这里要用 addAssign，因为 positionLocal 已经包含了初始位置
+        p.z.addAssign(sin(progress.mul(PI)).mul(4.0));
 
-      return p;
-    });
+        return p;
+      }
+    );
 
     const progress = progressBuffer.toAttribute();
+    const rotation = rotationBuffer.toAttribute();
 
     const material = new MeshBasicNodeMaterial({
-      positionNode: positionBuffer.toAttribute().add(posLocal(progress)), // 必须叠加 positionLocal
+      positionNode: positionBuffer
+        .toAttribute()
+        .add(posLocal(progress, rotation)), // 必须叠加 positionLocal
       colorNode: colorBuffer.toAttribute(),
       side: 2,
     });
@@ -143,6 +191,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const mesh = new Mesh(geometry, material);
     mesh.count = count;
+    mesh.scale.setScalar(meshSize / size);
     // mesh.frustumCulled = false;
 
     scene.add(mesh);
@@ -178,8 +227,15 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       const x = Math.floor(Math.random() * size);
       const y = Math.floor(Math.random() * size);
       const index = y * size + x;
-      console.log(` ${y} 行 ${x} 列`, index);
-      uActiveTime.array[index] = performance.now() * 0.001;
+
+      fillIndex = ++fillIndex % maxPoints;
+      console.log(` ${y} 行 ${x} 列`, fillIndex);
+      uActiveList.array[fillIndex] = new Vector2(
+        index,
+        performance.now() * 0.001
+      );
+      // uActiveList.array[fillIndex] = new Vector2(0, performance.now() * 0.001);
+      uActiveListLength.value = uActiveList.array.filter(Boolean).length;
     };
     window.addEventListener("click", clickHandler);
 
