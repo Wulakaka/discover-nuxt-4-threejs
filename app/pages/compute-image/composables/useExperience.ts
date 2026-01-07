@@ -3,7 +3,6 @@ import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 import {Fn} from "three/src/nodes/TSL.js";
 import type {float} from "three/tsl";
 import {
-  abs,
   distance,
   If,
   deltaTime,
@@ -17,6 +16,8 @@ import {
   uniformArray,
   vec2,
   vec3,
+  uniform,
+  abs,
 } from "three/tsl";
 
 import {
@@ -26,10 +27,8 @@ import {
   PlaneGeometry,
   Scene,
   TextureLoader,
-  Vector2,
   WebGPURenderer,
 } from "three/webgpu";
-import gsap from "gsap";
 
 export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   let disposeFn: (() => void) | null = null;
@@ -49,11 +48,12 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const scene = new Scene();
 
     // TSL
-    const size = 4;
+    const size = 40;
     const count = Math.pow(size, 2);
 
-    const points: Vector2[] = [];
-    const uPoints = uniformArray([new Vector2(0.5, 0.5)], "vec2");
+    const uActiveTime = uniformArray(Array(count).fill(0), "float");
+
+    const uTime = uniform(performance.now() * 0.001, "float");
 
     const positionBuffer = instancedArray(count, "vec3");
 
@@ -79,12 +79,12 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
       // progress
       const progress = progressBuffer.element(instanceIndex);
-      progress.assign(0);
+      progress.assign(1);
     })().compute(count);
 
     const updateCompute = Fn(() => {
       // position
-      const pos = positionBuffer.element(instanceIndex);
+      // const pos = positionBuffer.element(instanceIndex);
 
       const col = instanceIndex.mod(size).toFloat();
       const row = instanceIndex.div(size).toFloat();
@@ -95,19 +95,31 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
       // progress
       const progress = progressBuffer.element(instanceIndex);
-      progress.assign(progress.add(deltaTime.mul(0.1)).min(1));
 
-      // const strength = float(0);
+      Loop(count, ({i}) => {
+        const activeTime = uActiveTime.element(i);
+        If(activeTime.greaterThan(0), () => {
+          const activeUv = vec2(
+            i
+              .mod(size)
+              .toFloat()
+              .div(size - 1),
+            i
+              .div(size)
+              .toFloat()
+              .div(size - 1)
+          );
+          const dist = distance(newUv, activeUv);
+          const velocity = 0.5;
+          const waveDist = uTime.sub(activeTime).mul(velocity);
 
-      // const l = uPoints.length();
-
-      Loop(1, ({i}) => {
-        const point = uPoints.element(i);
-        const dist = distance(pos.xy, point);
-        If(abs(dist.sub(deltaTime)).lessThan(0.1), () => {
-          progress.assign(0);
+          If(abs(waveDist.sub(dist)).lessThan(0.1), () => {
+            progress.subAssign(1);
+          });
         });
       });
+
+      progress.assign(progress.add(deltaTime.mul(0.2)).clamp(0, 1));
     })().compute(count);
 
     /**
@@ -163,17 +175,11 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      * Click
      */
     const clickHandler = () => {
-      points.push(new Vector2(Math.random(), Math.random()));
-      const progress = {
-        value: 0,
-      };
-      gsap.to(progress, {
-        value: 1,
-        duration: 5,
-        onComplete: () => {
-          points.pop();
-        },
-      });
+      const x = Math.floor(Math.random() * size);
+      const y = Math.floor(Math.random() * size);
+      const index = y * size + x;
+      console.log(` ${y} 行 ${x} 列`, index);
+      uActiveTime.array[index] = performance.now() * 0.001;
     };
     window.addEventListener("click", clickHandler);
 
@@ -184,8 +190,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const camera = new PerspectiveCamera(
       35,
       sizes.width / sizes.height,
-      1,
-      100
+      0.1,
+      1000
     );
 
     camera.position.set(0, 0, 60);
@@ -221,6 +227,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     function animate() {
       // Update controls
       controls.update();
+
+      uTime.value = performance.now() * 0.001;
 
       // Render
       renderer.compute(updateCompute);
