@@ -19,6 +19,12 @@ import {
   sin,
   length,
   abs,
+  luminance,
+  saturate,
+  vec4,
+  cos,
+  PI2,
+  mix,
 } from "three/tsl";
 
 import {
@@ -79,9 +85,11 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const progressBuffer = instancedArray(count, "float");
 
-    const velocity = uniform(5, "float");
+    const velocity = uniform(30, "float");
 
-    const amplitude = uniform(5, "float");
+    const amplitude = uniform(10, "float");
+
+    const progressDamping = uniform(0.2, "float");
 
     const initCompute = Fn(() => {
       // position
@@ -111,24 +119,20 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       const pos = positionBuffer.element(instanceIndex);
 
       // rotation
-      const rot = rotationBuffer.element(instanceIndex);
-      const baseRotation = vec3(0, 0, 0);
+      // const rot = rotationBuffer.element(instanceIndex);
+      // const baseRotation = vec3(0, 0, 0);
 
       const col = instanceIndex.mod(size);
       const row = instanceIndex.div(size);
       const newUv = vec2(col.toFloat(), row.toFloat()).add(0.5).div(size);
 
       // color
-      // const color = colorBuffer.element(instanceIndex);
-      // 会出现bug
-      // color.assign(texture(image, colorUv));
+      const color = colorBuffer.element(instanceIndex);
 
       // progress
       const progress = progressBuffer.element(instanceIndex);
 
-      progress.assign(
-        progress.add(deltaTime.mul(0.1).div(meshSize / size)).clamp(0, 1)
-      );
+      progress.assign(progress.add(deltaTime.mul(progressDamping)).clamp(0, 1));
 
       Loop(uActiveListLength, ({i}) => {
         const activeItem = uActiveList.element(i);
@@ -151,28 +155,37 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
           const waveDist = elapsedTime.mul(velocity);
 
           const diff = waveDist.sub(dist);
-          If(abs(diff).lessThan(0.1), () => {
+          If(abs(diff).lessThan(1), () => {
             progress.subAssign(1.0);
           });
 
-          const toPoint = activeUv.sub(newUv);
+          // const toPoint = activeUv.sub(newUv);
 
-          If(toPoint.length().greaterThan(0.0), () => {
-            const toPointDir = toPoint.normalize();
-            baseRotation.addAssign(vec3(toPointDir.xy, 0));
-          });
+          // If(toPoint.length().greaterThan(0.0), () => {
+          //   const toPointDir = toPoint.normalize();
+          //   baseRotation.addAssign(vec3(toPointDir.xy, 0));
+          // });
         });
       });
 
       progress.clampAssign(0, 1);
 
-      pos.z.assign(sin(progress.mul(PI)).mul(amplitude));
+      // 更新
+      const posProgress = progress.remap(0, 0.1).clamp(0, 1);
+      pos.z.assign(sin(posProgress.mul(PI)).mul(amplitude));
 
-      If(baseRotation.length().equal(0.0), () => {
-        baseRotation.assign(vec3(0, 1, 0));
-      });
+      const originalColor = texture(image, newUv);
+      const colorL = luminance(originalColor.xyz);
+      const strength = cos(progress.mul(PI2)).add(1).mul(0.5).oneMinus();
 
-      rot.assign(rotate(baseRotation.normalize(), vec3(0, 0, 0)));
+      // 3个通道值保持一致就会出现灰度效果
+      color.assign(mix(vec4(vec3(colorL), 1), originalColor, strength));
+
+      // If(baseRotation.length().equal(0.0), () => {
+      //   baseRotation.assign(vec3(0, 1, 0));
+      // });
+
+      // rot.assign(rotate(baseRotation.normalize(), vec3(0, 0, 0)));
     })().compute(count);
 
     /**
@@ -296,8 +309,9 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const gui = (<Inspector>renderer.inspector).createParameters("Parameters");
 
-    gui.add(velocity, "value", 0.01, 20, 0.1).name("Wave Velocity");
+    gui.add(velocity, "value", 0.01, 100, 0.1).name("Wave Velocity");
     gui.add(amplitude, "value", 0.1, 40, 0.1).name("Wave Amplitude");
+    gui.add(progressDamping, "value", 0.01, 1, 0.01).name("Progress Damping");
 
     /**
      * Animate
