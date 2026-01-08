@@ -10,7 +10,6 @@ import {
   Loop,
   PI,
   positionLocal,
-  rotate,
   texture,
   uniformArray,
   vec2,
@@ -19,9 +18,6 @@ import {
   sin,
   length,
   abs,
-  luminance,
-  saturate,
-  vec4,
   cos,
   PI2,
   mix,
@@ -55,6 +51,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   async function init(canvas: HTMLCanvasElement) {
     const textureLoader = new TextureLoader();
     const image = textureLoader.load("/image.jpg");
+    const image2 = textureLoader.load("/image2.jpeg");
 
     // Scene
     const scene = new Scene();
@@ -64,7 +61,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const maxPoints = 50;
 
     // TSL
-    const size = 100;
+    const size = 200;
     const count = Math.pow(size, 2);
 
     const activeList: Vector2[] = Array(maxPoints)
@@ -90,6 +87,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const amplitude = uniform(10, "float");
 
     const progressDamping = uniform(0.2, "float");
+
+    const wavePercentage = uniform(0.1, "float");
 
     const initCompute = Fn(() => {
       // position
@@ -171,15 +170,15 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       progress.clampAssign(0, 1);
 
       // 更新
-      const posProgress = progress.remap(0, 0.1).clamp(0, 1);
+      const posProgress = progress.remap(0, wavePercentage).clamp(0, 1);
       pos.z.assign(sin(posProgress.mul(PI)).mul(amplitude));
 
       const originalColor = texture(image, newUv);
-      const colorL = luminance(originalColor.xyz);
+      const targetColor = texture(image2, newUv);
       const strength = cos(progress.mul(PI2)).add(1).mul(0.5).oneMinus();
 
       // 3个通道值保持一致就会出现灰度效果
-      color.assign(mix(vec4(vec3(colorL), 1), originalColor, strength));
+      color.assign(mix(originalColor, targetColor, strength));
 
       // If(baseRotation.length().equal(0.0), () => {
       //   baseRotation.assign(vec3(0, 1, 0));
@@ -253,7 +252,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     /**
      * Click
      */
-    const clickHandler = () => {
+    const createWave = () => {
       const x = Math.floor(Math.random() * size);
       const y = Math.floor(Math.random() * size);
       const index = y * size + x;
@@ -269,7 +268,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       //   performance.now() * 0.001
       // );
     };
-    window.addEventListener("click", clickHandler);
+    // window.addEventListener("click", createWave);
 
     /**
      * Camera
@@ -312,6 +311,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     gui.add(velocity, "value", 0.01, 100, 0.1).name("Wave Velocity");
     gui.add(amplitude, "value", 0.1, 40, 0.1).name("Wave Amplitude");
     gui.add(progressDamping, "value", 0.01, 1, 0.01).name("Progress Damping");
+    gui.add(wavePercentage, "value", 0.01, 1, 0.01).name("Wave Percentage");
+    gui.add({createWave}, "createWave").name("Create Wave");
 
     /**
      * Animate
@@ -334,7 +335,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       renderer.dispose();
 
       window.removeEventListener("resize", resizeHandler);
-      window.removeEventListener("click", clickHandler);
+      // window.removeEventListener("click", createWave);
     }
 
     return dispose;
