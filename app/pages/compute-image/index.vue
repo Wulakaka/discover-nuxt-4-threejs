@@ -7,9 +7,11 @@ useExperience(refCanvas);
 </script>
 
 <template>
-  <div class="absolute inset-0 bg-black">
-    <canvas ref="refCanvas" class="w-full h-full" />
-  </div>
+  <ClientOnly>
+    <div class="absolute inset-0 bg-[#202020]">
+      <canvas ref="refCanvas" class="w-full h-full" />
+    </div>
+  </ClientOnly>
 </template>
 
 <style scoped></style>

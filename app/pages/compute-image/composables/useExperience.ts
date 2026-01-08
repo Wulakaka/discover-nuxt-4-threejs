@@ -1,9 +1,8 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
 import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 import {Fn} from "three/src/nodes/TSL.js";
+import type {float} from "three/tsl";
 import {
-  float,
-  distance,
   If,
   deltaTime,
   instancedArray,
@@ -18,6 +17,8 @@ import {
   vec3,
   uniform,
   sin,
+  length,
+  abs,
 } from "three/tsl";
 
 import {
@@ -33,9 +34,13 @@ import {
 
 export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   let disposeFn: (() => void) | null = null;
-  whenever(ref, async (canvas) => {
-    disposeFn = await init(canvas);
-  });
+  whenever(
+    ref,
+    async (canvas) => {
+      disposeFn = await init(canvas);
+    },
+    {immediate: true, once: true}
+  );
 
   onBeforeUnmount(() => {
     disposeFn?.();
@@ -74,6 +79,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const progressBuffer = instancedArray(count, "float");
 
+    const velocity = uniform(5, "float");
+
     const initCompute = Fn(() => {
       // position
       const pos = positionBuffer.element(instanceIndex);
@@ -82,7 +89,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       const row = instanceIndex.div(size).toFloat();
       pos.x.assign(col.sub(size / 2).add(0.5));
       pos.y.assign(row.sub(size / 2).add(0.5));
-      const newUv = vec2(col.div(size - 1), row.div(size - 1));
+      const newUv = vec2(col, row).add(0.5).div(size);
 
       // rotation
       const rot = rotationBuffer.element(instanceIndex);
@@ -99,18 +106,20 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const updateCompute = Fn(() => {
       // position
-      // const pos = positionBuffer.element(instanceIndex);
+      const pos = positionBuffer.element(instanceIndex);
 
       // rotation
       const rot = rotationBuffer.element(instanceIndex);
       const baseRotation = vec3(0, 0, 0);
 
-      const col = instanceIndex.mod(size).toFloat();
-      const row = instanceIndex.div(size).toFloat();
-      const newUv = vec2(col.div(size - 1), row.div(size - 1));
+      const col = instanceIndex.mod(size);
+      const row = instanceIndex.div(size);
+      const newUv = vec2(col.toFloat(), row.toFloat()).add(0.5).div(size);
+
       // color
-      const color = colorBuffer.element(instanceIndex);
-      color.assign(texture(image, newUv));
+      // const color = colorBuffer.element(instanceIndex);
+      // 会出现bug
+      // color.assign(texture(image, colorUv));
 
       // progress
       const progress = progressBuffer.element(instanceIndex);
@@ -122,26 +131,28 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       Loop(uActiveListLength, ({i}) => {
         const activeItem = uActiveList.element(i);
 
-        const activeIndex = activeItem.x.toVar();
+        const activeIndex = activeItem.x.toUint();
+        const activeTime = activeItem.y;
+
+        const elapsedTime = uTime.sub(activeTime);
+
         If(activeIndex.lessThan(count), () => {
-          const activeTime = activeItem.y.toVar();
           const activeUv = vec2(
-            activeIndex
-              .mod(size)
-              .toFloat()
-              .div(size - 1),
-            activeIndex
-              .div(size)
-              .toFloat()
-              .div(size - 1)
-          );
-          const dist = distance(newUv, activeUv);
-          const velocity = float(0.5);
-          const waveDist = uTime.sub(activeTime).mul(velocity);
+            activeIndex.mod(size).toFloat(),
+            activeIndex.div(size).toFloat()
+          )
+            .add(0.5)
+            .div(size);
+
+          const dist = length(newUv.sub(activeUv).mul(size));
+
+          const waveDist = elapsedTime.mul(velocity);
 
           const diff = waveDist.sub(dist);
+          If(abs(diff).lessThan(0.1), () => {
+            progress.subAssign(1.0);
+          });
 
-          progress.addAssign(diff.clamp(0, 1));
           const toPoint = activeUv.sub(newUv);
 
           If(toPoint.length().greaterThan(0.0), () => {
@@ -150,6 +161,10 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
           });
         });
       });
+
+      progress.clampAssign(0, 1);
+
+      pos.z.assign(sin(progress.mul(PI)).mul(4.0));
 
       If(baseRotation.length().equal(0.0), () => {
         baseRotation.assign(vec3(0, 1, 0));
@@ -168,23 +183,23 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       ]) => {
         const p = positionLocal.toVar();
         // p.assign(rotate(positionLocal, vec3(0, progress.mul(PI), 0)));
-        p.assign(rotate(p, vec3(1, 1, 1).mul(PI).mul(progress)));
+        // p.assign(rotate(p, vec3(1, 1, 1).mul(PI).mul(progress)));
         // 这里要用 addAssign，因为 positionLocal 已经包含了初始位置
-        p.z.addAssign(sin(progress.mul(PI)).mul(4.0));
+        // p.z.addAssign(sin(progress.mul(PI)).mul(4.0));
 
         return p;
       }
     );
 
+    const aPosition = positionBuffer.toAttribute();
     const progress = progressBuffer.toAttribute();
     const rotation = rotationBuffer.toAttribute();
 
     const material = new MeshBasicNodeMaterial({
-      positionNode: positionBuffer
-        .toAttribute()
-        .add(posLocal(progress, rotation)), // 必须叠加 positionLocal
+      positionNode: aPosition.add(positionLocal), // 必须叠加 positionLocal
       colorNode: colorBuffer.toAttribute(),
       side: 2,
+      transparent: true,
     });
 
     const geometry = new PlaneGeometry(1, 1);
@@ -234,8 +249,10 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         index,
         performance.now() * 0.001
       );
-      // uActiveList.array[fillIndex] = new Vector2(0, performance.now() * 0.001);
-      uActiveListLength.value = uActiveList.array.filter(Boolean).length;
+      // uActiveList.array[fillIndex] = new Vector2(
+      //   count - 1,
+      //   performance.now() * 0.001
+      // );
     };
     window.addEventListener("click", clickHandler);
 
@@ -266,16 +283,18 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       antialias: true,
     });
 
-    await renderer.init();
-
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.inspector = new Inspector();
-    renderer.setClearColor(0x202020, 1);
 
+    await renderer.init();
+    // 需要在 setAnimationLoop 之前调用 compute 初始化数据，否则图像会不显示
+    renderer.compute(initCompute);
     renderer.setAnimationLoop(animate);
 
-    renderer.compute(initCompute);
+    const gui = (<Inspector>renderer.inspector).createParameters("Parameters");
+
+    gui.add(velocity, "value", 0.01, 20, 0.1).name("Wave Velocity");
 
     /**
      * Animate
