@@ -81,6 +81,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const velocity = uniform(5, "float");
 
+    const amplitude = uniform(5, "float");
+
     const initCompute = Fn(() => {
       // position
       const pos = positionBuffer.element(instanceIndex);
@@ -164,7 +166,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
       progress.clampAssign(0, 1);
 
-      pos.z.assign(sin(progress.mul(PI)).mul(4.0));
+      pos.z.assign(sin(progress.mul(PI)).mul(amplitude));
 
       If(baseRotation.length().equal(0.0), () => {
         baseRotation.assign(vec3(0, 1, 0));
@@ -295,6 +297,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const gui = (<Inspector>renderer.inspector).createParameters("Parameters");
 
     gui.add(velocity, "value", 0.01, 20, 0.1).name("Wave Velocity");
+    gui.add(amplitude, "value", 0.1, 40, 0.1).name("Wave Amplitude");
 
     /**
      * Animate
