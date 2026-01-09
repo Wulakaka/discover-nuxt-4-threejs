@@ -10,7 +10,6 @@ import {
   texture,
   vec2,
   uniform,
-  mix,
   mx_noise_vec3,
   mx_noise_float,
   float,
@@ -62,9 +61,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const colorBuffer = instancedArray(count, "vec4");
 
     // 线性变化
-    const baseProgressBuffer = instancedArray(count, "float");
-
-    // TODO 实际变化 二次方
     const progressBuffer = instancedArray(count, "float");
 
     const randomArray = new Float32Array(count);
@@ -82,15 +78,15 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const progressDamping = uniform(0.01, "float");
 
     const resetCompute = Fn(() => {
-      const baseProgress = baseProgressBuffer.element(instanceIndex);
       const progress = progressBuffer.element(instanceIndex);
+      const basePos = basePositionBuffer.element(instanceIndex);
       const pos = positionBuffer.element(instanceIndex);
 
-      baseProgress.assign(
+      pos.assign(basePos);
+
+      progress.assign(
         mx_noise_float(pos.xyz.mul(0.01)).remap(-1, 1, 0, threshold).add(offset)
       );
-      progress.assign(baseProgress);
-      pos.assign(basePositionBuffer.element(instanceIndex));
     })().compute(count);
 
     const initCompute = Fn(() => {
@@ -100,11 +96,11 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       // instanceIndex 的类型是 uint, 需要转换为 float 或者 int 才能进行数学运算
       const col = instanceIndex.mod(size).toFloat();
       const row = instanceIndex.div(size).toFloat();
-      pos.x.assign(col.sub(size / 2).add(0.5));
-      pos.y.assign(row.sub(size / 2).add(0.5));
-      pos.z.assign(0);
+      basePos.x.assign(col.sub(size / 2).add(0.5));
+      basePos.y.assign(row.sub(size / 2).add(0.5));
+      basePos.z.assign(0);
 
-      basePos.assign(pos.xyz);
+      pos.assign(basePos.xyz);
       const newUv = vec2(col, row).add(0.5).div(size);
 
       // color
@@ -115,33 +111,18 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const updateCompute = Fn(() => {
       // position
       const pos = positionBuffer.element(instanceIndex);
-
-      const col = instanceIndex.mod(size);
-      const row = instanceIndex.div(size);
-      const newUv = vec2(col.toFloat(), row.toFloat()).add(0.5).div(size);
-
-      // color
-      const color = colorBuffer.element(instanceIndex);
+      const random = randomBuffer.element(instanceIndex);
 
       // progress
-      const baseProgress = baseProgressBuffer.element(instanceIndex);
       const progress = progressBuffer.element(instanceIndex);
 
-      If(baseProgress.lessThan(1), () => {
-        baseProgress.addAssign(deltaTime.mul(progressDamping));
+      If(progress.lessThan(1), () => {
+        progress.addAssign(deltaTime.mul(progressDamping));
 
-        progress.assign(baseProgress.pow2());
-
-        If(baseProgress.greaterThanEqual(threshold), () => {
-          pos.addAssign(mx_noise_vec3(pos.xyz.mul(0.01), 1));
+        If(progress.greaterThanEqual(threshold), () => {
+          pos.addAssign(mx_noise_vec3(pos.xyz.mul(0.01), 1).mul(random));
         });
       });
-
-      const originalColor = texture(image, newUv);
-      const targetColor = texture(image2, newUv);
-
-      // 3个通道值保持一致就会出现灰度效果
-      color.assign(mix(originalColor, targetColor, 0));
     })().compute(count);
 
     /**
@@ -149,7 +130,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      */
 
     const aPosition = positionBuffer.toAttribute();
-    const aProgress = baseProgressBuffer.toAttribute();
+    const aProgress = progressBuffer.toAttribute();
     const aRandom = randomBuffer.toAttribute();
 
     const material = new MeshBasicNodeMaterial({
@@ -211,6 +192,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      * Click
      */
     const reset = () => {
+      // renderer.compute(initCompute);
       renderer.compute(resetCompute);
     };
 
