@@ -13,6 +13,7 @@ import {
   If,
   objectWorldMatrix,
   attribute,
+  instancedArray,
 } from "three/tsl";
 
 import type {BufferAttribute, Mesh} from "three/webgpu";
@@ -74,7 +75,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      * Material
      */
 
-    const jelly = Fn(({geometry, renderer, object}) => {
+    const jelly = Fn(({geometry, object}) => {
       // 因为要在加载之后才能获取到 geometry 的信息
       // 所以要在这里创建 storage buffer attribute
       const count = geometry.attributes.position!.count;
@@ -83,11 +84,9 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         .position as BufferAttribute;
 
       const positionStorageBufferAttribute = new StorageBufferAttribute(
-        count,
+        positionBaseAttribute.array,
         3
       );
-
-      const speedBufferAttribute = new StorageBufferAttribute(count, 3);
 
       geometry.setAttribute("storagePosition", positionStorageBufferAttribute);
 
@@ -99,16 +98,12 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         "vec3",
         count
       );
-      const speedAttribute = storage(speedBufferAttribute, "vec3", count);
+      const speedAttribute = instancedArray(count, "vec3");
 
       // Vectors
       const basePosition = positionAttribute.element(instanceIndex);
       const currentPosition = positionStorageAttribute.element(instanceIndex);
       const currentSpeed = speedAttribute.element(instanceIndex);
-
-      const computeInit = Fn(() => {
-        currentPosition.assign(basePosition);
-      })().compute(count);
 
       const computeUpdate = Fn(() => {
         // pinch
@@ -126,10 +121,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
           currentPosition.addAssign(direction.mul(power));
         });
 
-        const distance = basePosition.distance(currentPosition);
-        const force = elasticity
-          .mul(distance)
-          .mul(basePosition.sub(currentPosition));
+        const force = elasticity.mul(basePosition.sub(currentPosition));
 
         currentSpeed.addAssign(force);
 
@@ -137,10 +129,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
         currentPosition.addAssign(currentSpeed);
       })().compute(count);
-
-      computeUpdate.onInit(() => {
-        renderer.compute(computeInit);
-      });
 
       return computeUpdate;
     });
@@ -244,7 +232,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       } else {
         pointerPosition.value.w = 0;
       }
-      console.log(pointerPosition.value);
     }
 
     /**
