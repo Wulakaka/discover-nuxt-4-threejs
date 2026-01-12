@@ -49,7 +49,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     // uniforms
     const pointerPosition = uniform(vec4(0));
 
-    const elasticity = uniform(0.4);
+    const elasticity = uniform(0.04);
     const damping = uniform(0.94);
     const brushSize = uniform(0.25);
     const brushStrength = uniform(0.22);
