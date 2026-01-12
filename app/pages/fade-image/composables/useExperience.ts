@@ -43,7 +43,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   async function init(canvas: HTMLCanvasElement) {
     const textureLoader = new TextureLoader();
     const image = textureLoader.load("/image.jpg");
-    const image2 = textureLoader.load("/image2.jpeg");
 
     // Scene
     const scene = new Scene();
