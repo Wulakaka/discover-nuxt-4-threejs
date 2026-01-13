@@ -14,13 +14,20 @@ import {
   mx_noise_float,
   float,
   Fn,
+  color,
+  abs,
+  vec3,
 } from "three/tsl";
 
 import {
+  AmbientLight,
   BoxGeometry,
+  DirectionalLight,
   Mesh,
-  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+  PCFSoftShadowMap,
   PerspectiveCamera,
+  PlaneGeometry,
   Scene,
   TextureLoader,
   WebGPURenderer,
@@ -47,10 +54,38 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     // Scene
     const scene = new Scene();
 
+    const ambientLight = new AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new DirectionalLight(0xffffff, 2.5);
+    directionalLight.position.set(0, 0, 20);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.near = 1;
+    directionalLight.shadow.camera.far = 40;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.bias = -0.001;
+    scene.add(directionalLight);
+
+    // const cameraHelper = new CameraHelper(directionalLight.shadow.camera);
+    // scene.add(cameraHelper);
+
+    const plane = new Mesh(
+      new PlaneGeometry(40, 40),
+      new MeshStandardNodeMaterial({colorNode: color(0x999999)})
+    );
+    plane.position.z = -1;
+    plane.receiveShadow = true;
+    scene.add(plane);
+
     const meshSize = 30;
 
     // TSL
-    const size = 200;
+    const size = 100;
     const count = Math.pow(size, 2);
 
     const positionBuffer = instancedArray(count, "vec3");
@@ -72,9 +107,11 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const offset = uniform(0.08, "float");
 
-    const fadeDuration = uniform(2, "float");
+    const fadeDuration = uniform(3, "float");
 
     const progressDamping = uniform(0.01, "float");
+
+    const noiseScale = uniform(0.02, "float");
 
     const resetCompute = Fn(() => {
       const progress = progressBuffer.element(instanceIndex);
@@ -84,7 +121,9 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       pos.assign(basePos);
 
       progress.assign(
-        mx_noise_float(pos.xyz.mul(0.01)).remap(-1, 1, 0, threshold).add(offset)
+        mx_noise_float(pos.xyz.mul(noiseScale))
+          .remap(-1, 1, 0, threshold)
+          .add(offset)
       );
     })().compute(count);
 
@@ -119,7 +158,12 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         progress.addAssign(deltaTime.mul(progressDamping));
 
         If(progress.greaterThanEqual(threshold), () => {
-          pos.addAssign(mx_noise_vec3(pos.xyz.mul(0.01), 1).mul(random));
+          const deltaPos = mx_noise_vec3(
+            pos.xyz.mul(noiseScale),
+            vec3(1, 1, 2)
+          ).toVar();
+          deltaPos.z.assign(abs(deltaPos.z));
+          pos.addAssign(deltaPos.mul(random));
         });
       });
     })().compute(count);
@@ -132,7 +176,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const aProgress = progressBuffer.toAttribute();
     const aRandom = randomBuffer.toAttribute();
 
-    const material = new MeshBasicNodeMaterial({
+    const material = new MeshStandardNodeMaterial({
       positionNode: aPosition.add(
         positionLocal.mul(
           aProgress
@@ -159,6 +203,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const mesh = new Mesh(geometry, material);
     mesh.count = count;
     mesh.scale.setScalar(meshSize / size);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     // mesh.frustumCulled = false;
 
     scene.add(mesh);
@@ -191,7 +237,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      * Click
      */
     const reset = () => {
-      // renderer.compute(initCompute);
       renderer.compute(resetCompute);
     };
 
@@ -225,6 +270,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.inspector = new Inspector();
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = PCFSoftShadowMap;
 
     await renderer.init();
     // 需要在 setAnimationLoop 之前调用 compute 初始化数据，否则图像会不显示
@@ -241,6 +288,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       .name("Progress Damping");
 
     gui.add(fadeDuration, "value", 0.1, 5, 0.1).name("Fade Duration");
+
+    gui.add(noiseScale, "value", 0.001, 0.1, 0.001).name("Noise Scale");
 
     gui.add({fn: reset}, "fn").name("Reset");
 
