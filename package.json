@@ -26,6 +26,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@pmndrs/pointer-events": "^6.6.29",
     "@types/three": "^0.182.0",
     "@vueuse/core": "14.1.0",
     "@vueuse/nuxt": "^14.1.0",
