@@ -21,8 +21,9 @@ const {state, error, isLoading} = useLoader(PCDLoader, "/pcd/test.pcd");
         />
       </Align>
     </TresCanvas>
-    <div class="absolute inset-0 z-10 text-white">
-      error: {{ error }} isLoading: {{ isLoading }}
+    <div class="absolute inset-0 z-10 text-white pointer-events-none">
+      <p>error: {{ error }}</p>
+      <p>isLoading: {{ isLoading }}</p>
     </div>
   </div>
 </template>
