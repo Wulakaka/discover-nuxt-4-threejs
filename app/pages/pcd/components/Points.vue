@@ -28,13 +28,12 @@ function onClick(e: PointerEvent<MouseEvent>) {
     const y = point.getY(intersection.index!);
     const z = point.getZ(intersection.index!);
 
+    // 由于 x 轴旋转了 -90 度，这里需要调整坐标轴
     position.value = [
       x * 0.001 - alignPosition.x,
-      y * 0.001 - alignPosition.y,
-      z * 0.001 - alignPosition.z,
+      z * 0.001 - alignPosition.y,
+      -y * 0.001 - alignPosition.z,
     ];
-
-    console.log(position.value);
   } else {
     console.log("No point intersected.");
   }
@@ -49,7 +48,13 @@ function onAlignChange(options: {center: Vector3}) {
 <template>
   <TresGroup>
     <Align v-if="points" @change="onAlignChange">
-      <primitive :object="points" :scale="0.001" dispose @click="onClick" />
+      <primitive
+        :object="points"
+        :scale="0.001"
+        dispose
+        :rotation-x="-Math.PI / 2"
+        @click="onClick"
+      />
     </Align>
     <TresMesh ref="mark" :position="position" :scale="0.001">
       <TresBoxGeometry />
