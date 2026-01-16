@@ -26,7 +26,7 @@ const emit = defineEmits<Emits>();
 
 const raycaster = new Raycaster();
 // 这里是关键点，设置较小阈值
-raycaster.params.Points.threshold = 0.001; // 默认值是 1
+raycaster.params.Points.threshold = 0.0005; // 默认值是 1
 
 const alignPosition = new Vector3();
 
