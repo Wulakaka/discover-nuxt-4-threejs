@@ -1,23 +1,53 @@
 <script setup lang="ts">
 import {Align} from "@tresjs/cientos";
-import {Raycaster, Vector3} from "three";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  PointsMaterial,
+  Raycaster,
+  Vector3,
+  Points,
+} from "three";
 import type {PointerEvent} from "@pmndrs/pointer-events";
-import type {Vector2, Points} from "three";
+import type {Vector2} from "three";
 
 interface Props {
   points: Points;
   pointer: Vector2;
 }
 
+interface Emits {
+  select: [info: Vector3 | null];
+}
+
 const {points, pointer} = defineProps<Props>();
+
+const emit = defineEmits<Emits>();
 
 const raycaster = new Raycaster();
 // 这里是关键点，设置较小阈值
-raycaster.params.Points.threshold = 0.0005; // 默认值是 1
+raycaster.params.Points.threshold = 0.001; // 默认值是 1
 
 const alignPosition = new Vector3();
 
 const position = shallowRef<[number, number, number]>([0, 0, 0]);
+
+const markGeometry = new BufferGeometry();
+const positions = new Float32Array([0, 0, 0]);
+markGeometry.setAttribute("position", new BufferAttribute(positions, 3));
+
+const mark = new Points(
+  markGeometry,
+  new PointsMaterial({
+    color: "blue",
+    size: 12,
+    depthWrite: false,
+    depthTest: false,
+    sizeAttenuation: false,
+  })
+);
+
+mark.renderOrder = 1;
 
 function onClick(e: PointerEvent<MouseEvent>) {
   raycaster.setFromCamera(pointer, e.camera);
@@ -28,6 +58,8 @@ function onClick(e: PointerEvent<MouseEvent>) {
     const y = point.getY(intersection.index!);
     const z = point.getZ(intersection.index!);
 
+    emit("select", new Vector3(x, y, z));
+
     // 由于 x 轴旋转了 -90 度，这里需要调整坐标轴
     position.value = [
       x * 0.001 - alignPosition.x,
@@ -35,12 +67,12 @@ function onClick(e: PointerEvent<MouseEvent>) {
       -y * 0.001 - alignPosition.z,
     ];
   } else {
-    console.log("No point intersected.");
+    emit("select", null);
   }
 }
 
 function onAlignChange(options: {center: Vector3}) {
-  console.log("Align changed:", options);
+  // console.log("Align changed:", options);
   alignPosition.copy(options.center);
 }
 </script>
@@ -56,11 +88,7 @@ function onAlignChange(options: {center: Vector3}) {
         @click="onClick"
       />
     </Align>
-    <TresMesh ref="mark" :position="position" :scale="0.001">
-      <TresBoxGeometry />
-      <TresMeshBasicMaterial color="red" />
-      <TresAxesHelper :args="[10]" />
-    </TresMesh>
+    <primitive :object="mark" :position="position" />
   </TresGroup>
 </template>
 
