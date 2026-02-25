@@ -30,6 +30,7 @@
     "@types/three": "^0.182.0",
     "@vueuse/core": "14.1.0",
     "@vueuse/nuxt": "^14.1.0",
+    "sass-embedded": "^1.97.3",
     "typescript": "^5.9.3"
   }
 }
