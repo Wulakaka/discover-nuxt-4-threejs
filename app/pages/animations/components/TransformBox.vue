@@ -1,0 +1,35 @@
+<script setup lang="ts">
+const length = ref(3);
+</script>
+
+<template>
+  <div>
+    <button @click="length++">add</button>
+    <div class="grid">
+      <div
+        v-for="i in length"
+        :key="i"
+        class="card"
+        :style="{
+          '--index': length - 1 - i,
+        }"
+      />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.card {
+  width: 356px;
+  height: 74px;
+  box-shadow: 0 4px 12px #0000001a;
+  border: 1px solid #eeeeee;
+  background: white;
+  border-radius: 8px;
+  grid-area: 1 / 1;
+  --scale-increment: 0.05;
+  --translate-increment: -13%;
+  transform: scale(calc(1 - var(--index) * var(--scale-increment)))
+    translateY(calc(var(--index) * var(--translate-increment)));
+}
+</style>
