@@ -44,7 +44,7 @@ const mark = new Points(
     depthWrite: false,
     depthTest: false,
     sizeAttenuation: false,
-  })
+  }),
 );
 
 mark.renderOrder = 1;
