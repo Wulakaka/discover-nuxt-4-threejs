@@ -37,7 +37,7 @@ onRender(({elapsed, delta}) => {
       :dash-offset="dashOffset"
     />
     <TresGroup ref="arrowRef">
-      <TresMesh :rotation="[0, 0, Math.PI / 2]">
+      <TresMesh :rotation="[Math.PI / 2, 0, 0]">
         <TresConeGeometry :args="[0.1, 0.4, 4]" />
         <TresMeshBasicMaterial color="white" />
       </TresMesh>
