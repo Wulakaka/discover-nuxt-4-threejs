@@ -1,10 +1,12 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
+import type {float} from "three/tsl";
 import {
   abs,
+  bool,
   color,
   dot,
-  float,
   Fn,
+  If,
   mix,
   mx_noise_float,
   mx_noise_vec3,
@@ -28,6 +30,7 @@ import {
 import {
   Color,
   CylinderGeometry,
+  Group,
   Mesh,
   MeshBasicNodeMaterial,
   PerspectiveCamera,
@@ -80,11 +83,17 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const lightningDarkYScale = uniform(0.3);
 
-    const lightning1Color = uniform(color("#fe7216"));
+    const lightning1Color = uniform(color("#ff5b24"));
 
     const lightning2Color = uniform(color("#9effff"));
 
     const lightningSpeed = uniform(0);
+
+    const sphere1Threshold = uniform(0);
+
+    const sphere2Threshold = uniform(0.4);
+
+    const sphereDarkThreshold = uniform(0.46);
 
     // Scene
     const scene = new Scene();
@@ -139,68 +148,157 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
 
     const lightningGeometry = new CylinderGeometry(1.6, 1.6, 30, 8, 1, true);
 
+    const outputNode = Fn(
+      ({
+        yScale,
+        threshold,
+        strength,
+        baseColor,
+        shouldInvert,
+        xOffset,
+      }: {
+        yScale: ReturnType<typeof float>;
+        threshold: ReturnType<typeof float>;
+        strength: ReturnType<typeof float>;
+        baseColor: ReturnType<typeof color>;
+        shouldInvert: ReturnType<typeof bool>;
+        xOffset: number;
+      }) => {
+        const newUv = uv().toVar();
+        newUv.x.addAssign(xOffset);
+        newUv.y.mulAssign(yScale);
+        newUv.y.subAssign(time.mul(lightningSpeed));
+        const r = texture(lightningTexture, newUv).r.toVar();
+        r.stepAssign(threshold);
+        If(shouldInvert, () => {
+          r.oneMinusAssign();
+        });
+        const finalColor = baseColor.mul(strength).mul(r);
+        return vec4(finalColor, r);
+      },
+    );
+
     const lightning1Material = new MeshBasicNodeMaterial({
       side: 2,
       transparent: true,
-      outputNode: Fn(() => {
-        const newUv = uv().toVar();
-        newUv.x.addAssign(0.75);
-        newUv.y.mulAssign(lightning1YScale);
-        newUv.y.subAssign(time.mul(lightningSpeed));
-        const r = texture(lightningTexture, newUv).r.toVar();
-        r.stepAssign(lightning1Threshold);
-        const baseColor = lightning1Color.mul(lightning1Strength).mul(r);
-        return vec4(baseColor, r);
-      })(),
+      outputNode: outputNode({
+        yScale: lightning1YScale,
+        threshold: lightning1Threshold,
+        strength: lightning1Strength,
+        baseColor: lightning1Color,
+        shouldInvert: bool(false),
+        xOffset: 0,
+      }),
     });
 
     const lightning2Material = new MeshBasicNodeMaterial({
       side: 2,
       transparent: true,
-      outputNode: Fn(() => {
-        const newUv = uv().toVar();
-        newUv.x.addAssign(0.5);
-        newUv.y.mulAssign(lightning2YScale);
-        newUv.y.subAssign(time.mul(lightningSpeed));
-        const r = texture(lightningTexture, newUv).r.toVar();
-        r.stepAssign(lightning2Threshold);
-        r.oneMinusAssign();
-        const baseColor = lightning2Color.mul(lightning2Strength).mul(r);
-        return vec4(baseColor, r);
-      })(),
+      outputNode: outputNode({
+        yScale: lightning2YScale,
+        threshold: lightning2Threshold,
+        strength: lightning2Strength,
+        baseColor: lightning2Color,
+        shouldInvert: bool(true),
+        xOffset: 0.5,
+      }),
     });
 
     const lightningDarkMaterial = new MeshBasicNodeMaterial({
       side: 2,
       transparent: true,
-      outputNode: Fn(() => {
-        const newUv = uv().toVar();
-        newUv.y.mulAssign(lightningDarkYScale);
-        newUv.y.subAssign(time.mul(lightningSpeed));
-        const r = texture(lightningTexture, newUv).r.toVar();
-        r.smoothstepAssign(
-          lightningDarkThreshold,
-          lightningDarkThreshold.add(0.01),
-        );
-        const baseColor = color("#000000").mul(r);
-        return vec4(baseColor, r);
-      })(),
+      outputNode: outputNode({
+        yScale: lightningDarkYScale,
+        threshold: lightningDarkThreshold,
+        strength: 1,
+        baseColor: color("#000000"),
+        shouldInvert: bool(false),
+        xOffset: 0.75,
+      }),
     });
+
+    const lightningGroup = new Group();
 
     const lightning1 = new Mesh(lightningGeometry, lightning1Material);
     lightning1.scale.set(0.6, 1, 0.6);
     lightning1.rotateZ(-Math.PI / 2);
-    scene.add(lightning1);
 
     const lightning2 = new Mesh(lightningGeometry, lightning2Material);
     lightning2.scale.set(0.8, 1, 0.8);
     lightning2.rotateZ(-Math.PI / 2);
-    scene.add(lightning2);
 
     // 需要先实例化 lightning，再实例化 lightning2
     const lightningDark = new Mesh(lightningGeometry, lightningDarkMaterial);
     lightningDark.rotateZ(-Math.PI / 2);
-    scene.add(lightningDark);
+
+    lightningGroup.add(lightning1);
+    lightningGroup.add(lightning2);
+    lightningGroup.add(lightningDark);
+
+    // scene.add(lightningGroup);
+
+    const sphereGroup = new Group();
+
+    const sphereGeometry = new SphereGeometry(1.2, 32, 32);
+
+    const sphere1Material = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: outputNode({
+        yScale: 1,
+        threshold: sphere1Threshold,
+        strength: lightning1Strength,
+        baseColor: lightning1Color,
+        shouldInvert: bool(false),
+        xOffset: 0,
+      }),
+    });
+
+    const sphere1 = new Mesh(sphereGeometry, sphere1Material);
+
+    sphereGroup.add(sphere1);
+
+    const sphere2Material = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: outputNode({
+        yScale: 1,
+        threshold: sphere2Threshold,
+        strength: lightning2Strength,
+        baseColor: lightning2Color,
+        shouldInvert: bool(false),
+        xOffset: 0.5,
+      }),
+    });
+
+    const sphere2 = new Mesh(sphereGeometry, sphere2Material);
+    sphere2.scale.set(1.2, 1.2, 1.2);
+
+    sphereGroup.add(sphere2);
+
+    const sphereDarkMaterial = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: outputNode({
+        yScale: 1,
+        threshold: sphereDarkThreshold,
+        strength: 1,
+        baseColor: color("#000000"),
+        shouldInvert: bool(false),
+        xOffset: 0,
+      }),
+    });
+
+    const sphereDark = new Mesh(sphereGeometry, sphereDarkMaterial);
+    sphereDark.scale.set(1.4, 1.4, 1.4);
+    sphereGroup.add(sphereDark);
+
+    scene.add(sphereGroup);
+
+    // scene.add(sphere2);
+    // const sphereDark = new Mesh(sphereGeometry, lightningDarkMaterial);
+    // sphereDark.scale.set(1.4, 1.4, 1.4);
+    // scene.add(sphereDark);
 
     /**
      * Sizes
@@ -268,7 +366,19 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     postProcessing.outputNode = scenePassColor.add(bloomPass);
 
     // debug
-    const gui = (<Inspector>renderer.inspector).createParameters("Parameters");
+    const gui = (<Inspector>renderer.inspector).createParameters("调试");
+
+    gui.add(lightningSpeed, "value", 0, 5, 0.01).name("闪电速度");
+
+    const sphereFolder = gui.addFolder("球体");
+
+    sphereFolder.add(sphere1Threshold, "value", 0, 1, 0.01).name("球体1阈值");
+
+    sphereFolder.add(sphere2Threshold, "value", 0, 1, 0.01).name("球体2阈值");
+
+    sphereFolder
+      .add(sphereDarkThreshold, "value", 0, 1, 0.01)
+      .name("球体黑色部分阈值");
 
     const lightning1Folder = gui.addFolder("闪电1");
 
@@ -303,7 +413,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       .name("黑色闪电 Y 轴缩放");
     lightning1Folder.addColor(lightning1Color, "value").name("闪电1颜色");
     lightning2Folder.addColor(lightning2Color, "value").name("闪电2颜色");
-    gui.add(lightningSpeed, "value", 0, 5, 0.01).name("闪电速度");
 
     const bloomGui = gui.addFolder("bloom");
     bloomGui.add(bloomPass.strength, "value", 0, 10, 0.01).name("strength");
