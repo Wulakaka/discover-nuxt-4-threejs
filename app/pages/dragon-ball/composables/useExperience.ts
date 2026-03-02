@@ -1,15 +1,16 @@
 import {OrbitControls} from "three/examples/jsm/Addons.js";
-import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 import {
   abs,
   color,
   dot,
   float,
+  Fn,
   mix,
   mx_noise_float,
   mx_noise_vec3,
   normalLocal,
   normalView,
+  pass,
   PI2,
   positionLocal,
   positionViewDirection,
@@ -22,6 +23,7 @@ import {
   uv,
   vec2,
   vec3,
+  vec4,
 } from "three/tsl";
 import {
   Color,
@@ -29,14 +31,18 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   PerspectiveCamera,
+  PostProcessing,
   RepeatWrapping,
   Scene,
   SphereGeometry,
   TextureLoader,
   WebGPURenderer,
 } from "three/webgpu";
+import {bloom} from "three/addons/tsl/display/BloomNode.js";
+import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 
 import dustImage from "@/assets/dragon-ball/dust.webp";
+import lightningImage from "@/assets/dragon-ball/lightning.webp";
 
 export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   let disposeFn: (() => void) | null = null;
@@ -51,13 +57,34 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   function init(canvas: HTMLCanvasElement) {
     const textureLoader = new TextureLoader();
     const dustTexture = textureLoader.load(dustImage);
-    dustTexture.wrapS = dustTexture.wrapT = RepeatWrapping; // RepeatWrapping
-    /**
-     * gui
-     */
-    const gui = new GUI();
+    dustTexture.wrapS = dustTexture.wrapT = RepeatWrapping;
+
+    const lightningTexture = textureLoader.load(lightningImage);
+    lightningTexture.wrapS = lightningTexture.wrapT = RepeatWrapping;
 
     // uniforms
+
+    const lightning1Threshold = uniform(0.24);
+
+    const lightning1YScale = uniform(0.04);
+
+    const lightning1Strength = uniform(3.72);
+
+    const lightning2Threshold = uniform(0.46);
+
+    const lightning2YScale = uniform(0.3);
+
+    const lightning2Strength = uniform(1.57);
+
+    const lightningDarkThreshold = uniform(0.52);
+
+    const lightningDarkYScale = uniform(0.3);
+
+    const lightning1Color = uniform(color("#fe7216"));
+
+    const lightning2Color = uniform(color("#9effff"));
+
+    const lightningSpeed = uniform(0);
 
     // Scene
     const scene = new Scene();
@@ -80,7 +107,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
      * Mesh
      */
     const ball = new Mesh(ballGeometry, ballMaterial);
-    scene.add(ball);
+    // scene.add(ball);
 
     const dustGeometry = new CylinderGeometry(5.6, 4.2, 2, 256, 1, true);
 
@@ -95,7 +122,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     });
 
     const dust = new Mesh(dustGeometry, dustMaterial);
-    scene.add(dust);
+    // scene.add(dust);
 
     const dust2Geometry = new CylinderGeometry(8.8, 7.4, 2, 256, 1, true);
     const dust2Material = new MeshBasicNodeMaterial({
@@ -108,7 +135,72 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       depthWrite: false,
     });
     const dust2 = new Mesh(dust2Geometry, dust2Material);
-    scene.add(dust2);
+    // scene.add(dust2);
+
+    const lightningGeometry = new CylinderGeometry(1.6, 1.6, 30, 8, 1, true);
+
+    const lightning1Material = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: Fn(() => {
+        const newUv = uv().toVar();
+        newUv.x.addAssign(0.75);
+        newUv.y.mulAssign(lightning1YScale);
+        newUv.y.subAssign(time.mul(lightningSpeed));
+        const r = texture(lightningTexture, newUv).r.toVar();
+        r.stepAssign(lightning1Threshold);
+        const baseColor = lightning1Color.mul(lightning1Strength).mul(r);
+        return vec4(baseColor, r);
+      })(),
+    });
+
+    const lightning2Material = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: Fn(() => {
+        const newUv = uv().toVar();
+        newUv.x.addAssign(0.5);
+        newUv.y.mulAssign(lightning2YScale);
+        newUv.y.subAssign(time.mul(lightningSpeed));
+        const r = texture(lightningTexture, newUv).r.toVar();
+        r.stepAssign(lightning2Threshold);
+        r.oneMinusAssign();
+        const baseColor = lightning2Color.mul(lightning2Strength).mul(r);
+        return vec4(baseColor, r);
+      })(),
+    });
+
+    const lightningDarkMaterial = new MeshBasicNodeMaterial({
+      side: 2,
+      transparent: true,
+      outputNode: Fn(() => {
+        const newUv = uv().toVar();
+        newUv.y.mulAssign(lightningDarkYScale);
+        newUv.y.subAssign(time.mul(lightningSpeed));
+        const r = texture(lightningTexture, newUv).r.toVar();
+        r.smoothstepAssign(
+          lightningDarkThreshold,
+          lightningDarkThreshold.add(0.01),
+        );
+        const baseColor = color("#000000").mul(r);
+        return vec4(baseColor, r);
+      })(),
+    });
+
+    const lightning1 = new Mesh(lightningGeometry, lightning1Material);
+    lightning1.scale.set(0.6, 1, 0.6);
+    lightning1.rotateZ(-Math.PI / 2);
+    scene.add(lightning1);
+
+    const lightning2 = new Mesh(lightningGeometry, lightning2Material);
+    lightning2.scale.set(0.8, 1, 0.8);
+    lightning2.rotateZ(-Math.PI / 2);
+    scene.add(lightning2);
+
+    // 需要先实例化 lightning，再实例化 lightning2
+    const lightningDark = new Mesh(lightningGeometry, lightningDarkMaterial);
+    lightningDark.rotateZ(-Math.PI / 2);
+    scene.add(lightningDark);
 
     /**
      * Sizes
@@ -160,6 +252,62 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     });
     renderer.setSize(sizes.width, sizes.height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(new Color(0x2f2f2f));
+    renderer.inspector = new Inspector();
+
+    // post processing
+    const postProcessing = new PostProcessing(renderer);
+
+    // 创建 pass node
+    const scenePass = pass(scene, camera);
+    // Returns the texture node for the given output name.
+    const scenePassColor = scenePass.getTextureNode("output");
+
+    const bloomPass = bloom(scenePassColor, 0.42, 0.16, 1);
+
+    postProcessing.outputNode = scenePassColor.add(bloomPass);
+
+    // debug
+    const gui = (<Inspector>renderer.inspector).createParameters("Parameters");
+
+    const lightning1Folder = gui.addFolder("闪电1");
+
+    lightning1Folder
+      .add(lightning1Threshold, "value", 0, 1, 0.01)
+      .name("闪电1阈值");
+    lightning1Folder
+      .add(lightning1YScale, "value", 0, 1, 0.01)
+      .name("闪电1 Y 轴缩放");
+    lightning1Folder
+      .add(lightning1Strength, "value", 1, 4, 0.01)
+      .name("闪电1强度");
+
+    const lightning2Folder = gui.addFolder("闪电2");
+    lightning2Folder
+      .add(lightning2Threshold, "value", 0, 1, 0.01)
+      .name("闪电2阈值");
+    lightning2Folder
+      .add(lightning2YScale, "value", 0, 1, 0.01)
+      .name("闪电2 Y 轴缩放");
+    lightning2Folder
+      .add(lightning2Strength, "value", 1, 4, 0.01)
+      .name("闪电2强度");
+
+    const lightningDarkFolder = gui.addFolder("黑色闪电");
+
+    lightningDarkFolder
+      .add(lightningDarkThreshold, "value", 0, 1, 0.01)
+      .name("黑色闪电阈值");
+    lightningDarkFolder
+      .add(lightningDarkYScale, "value", 0, 1, 0.01)
+      .name("黑色闪电 Y 轴缩放");
+    lightning1Folder.addColor(lightning1Color, "value").name("闪电1颜色");
+    lightning2Folder.addColor(lightning2Color, "value").name("闪电2颜色");
+    gui.add(lightningSpeed, "value", 0, 5, 0.01).name("闪电速度");
+
+    const bloomGui = gui.addFolder("bloom");
+    bloomGui.add(bloomPass.strength, "value", 0, 10, 0.01).name("strength");
+    bloomGui.add(bloomPass.radius, "value", 0, 1, 0.01).name("radius");
 
     renderer.init().then(() => {
       /**
@@ -170,7 +318,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         controls.update();
 
         // Render
-        renderer.render(scene, camera);
+        // renderer.render(scene, camera);
+        postProcessing.render();
       });
     });
 
@@ -179,7 +328,6 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       ballMaterial.dispose();
       controls.dispose();
       renderer.dispose();
-      gui.destroy();
     }
 
     return dispose;
