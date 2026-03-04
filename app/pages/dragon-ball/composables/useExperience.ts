@@ -1,4 +1,4 @@
-import {OrbitControls} from "three/examples/jsm/Addons.js";
+import {GLTFLoader, OrbitControls} from "three/examples/jsm/Addons.js";
 import type {float} from "three/tsl";
 import {
   abs,
@@ -27,6 +27,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import type {Texture} from "three/webgpu";
 import {
   Color,
   CylinderGeometry,
@@ -46,24 +47,37 @@ import {Inspector} from "three/examples/jsm/inspector/Inspector.js";
 
 import dustImage from "@/assets/dragon-ball/dust.webp";
 import lightningImage from "@/assets/dragon-ball/lightning.webp";
+import outerLightningImage from "@/assets/dragon-ball/outer.png";
+import model from "@/assets/dragon-ball/cyl.glb?url";
 
 export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
   let disposeFn: (() => void) | null = null;
-  whenever(ref, (canvas) => {
-    disposeFn = init(canvas);
+  whenever(ref, async (canvas) => {
+    disposeFn = await init(canvas);
   });
 
   onBeforeUnmount(() => {
     disposeFn?.();
   });
 
-  function init(canvas: HTMLCanvasElement) {
+  async function init(canvas: HTMLCanvasElement) {
     const textureLoader = new TextureLoader();
+    const gltfLoader = new GLTFLoader();
+    const gltf = await gltfLoader.loadAsync(model);
+
+    const geo = gltf.scene.children[0]!.geometry!;
+
     const dustTexture = textureLoader.load(dustImage);
     dustTexture.wrapS = dustTexture.wrapT = RepeatWrapping;
 
     const lightningTexture = textureLoader.load(lightningImage);
     lightningTexture.wrapS = lightningTexture.wrapT = RepeatWrapping;
+    lightningTexture.flipY = false;
+
+    const outerLightningTexture = textureLoader.load(outerLightningImage);
+    outerLightningTexture.wrapS = outerLightningTexture.wrapT = RepeatWrapping;
+
+    outerLightningTexture.flipY = false;
 
     // uniforms
 
@@ -80,6 +94,8 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const lightning2Strength = uniform(1.57);
 
     const lightningDarkThreshold = uniform(0.52);
+
+    const lightningOuterThreshold = uniform(1);
 
     const lightningDarkYScale = uniform(0.3);
 
@@ -146,7 +162,15 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     const dust2 = new Mesh(dust2Geometry, dust2Material);
     // scene.add(dust2);
 
-    const lightningGeometry = new CylinderGeometry(1.6, 1.6, 30, 8, 1, true);
+    // const lightningOuterGeometry = new CylinderGeometry(
+    //   1.6,
+    //   1.6,
+    //   15,
+    //   8,
+    //   1,
+    //   true,
+    // );
+    const lightningGeometry = geo.clone();
 
     const outputNode = Fn(
       ({
@@ -156,6 +180,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor,
         shouldInvert,
         xOffset,
+        _texture,
       }: {
         yScale: ReturnType<typeof float>;
         threshold: ReturnType<typeof float>;
@@ -163,12 +188,13 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: ReturnType<typeof color>;
         shouldInvert: ReturnType<typeof bool>;
         xOffset: number;
+        _texture: Texture;
       }) => {
         const newUv = uv().toVar();
         newUv.x.addAssign(xOffset);
         newUv.y.mulAssign(yScale);
-        newUv.y.subAssign(time.mul(lightningSpeed));
-        const r = texture(lightningTexture, newUv).r.toVar();
+        newUv.y.addAssign(time.mul(lightningSpeed));
+        const r = texture(_texture, newUv).r.toVar();
         r.stepAssign(threshold);
         If(shouldInvert, () => {
           r.oneMinusAssign();
@@ -188,6 +214,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: lightning1Color,
         shouldInvert: bool(false),
         xOffset: 0,
+        _texture: lightningTexture,
       }),
     });
 
@@ -201,6 +228,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: lightning2Color,
         shouldInvert: bool(true),
         xOffset: 0.5,
+        _texture: lightningTexture,
       }),
     });
 
@@ -214,28 +242,47 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: color("#000000"),
         shouldInvert: bool(false),
         xOffset: 0.75,
+        _texture: lightningTexture,
       }),
     });
 
     const lightningGroup = new Group();
 
     const lightning1 = new Mesh(lightningGeometry, lightning1Material);
-    lightning1.scale.set(0.6, 1, 0.6);
-    lightning1.rotateZ(-Math.PI / 2);
+    lightning1.scale.set(1, 0.6, 0.6);
 
     const lightning2 = new Mesh(lightningGeometry, lightning2Material);
-    lightning2.scale.set(0.8, 1, 0.8);
-    lightning2.rotateZ(-Math.PI / 2);
+    lightning2.scale.set(1, 0.8, 0.8);
 
     // 需要先实例化 lightning，再实例化 lightning2
     const lightningDark = new Mesh(lightningGeometry, lightningDarkMaterial);
-    lightningDark.rotateZ(-Math.PI / 2);
+
+    const lightningOuter = new Mesh(
+      lightningGeometry,
+      new MeshBasicNodeMaterial({
+        side: 2,
+        transparent: true,
+        outputNode: Fn(() => {
+          const newUv = uv().toVar();
+          newUv.x.addAssign(time.mul(lightningSpeed));
+          const r = texture(outerLightningTexture, newUv).r;
+          const baseColor = vec3(0, 0, 0).toVar();
+          baseColor.addAssign(lightning1Color.mul(lightning1Strength).mul(r));
+          return vec4(baseColor, r);
+        })(),
+      }),
+    );
+
+    // lightningOuter.rotation.z = Math.PI / 2;
+
+    lightningOuter.scale.set(1, 1.4, 1.4);
 
     lightningGroup.add(lightning1);
     lightningGroup.add(lightning2);
     lightningGroup.add(lightningDark);
+    lightningGroup.add(lightningOuter);
 
-    // scene.add(lightningGroup);
+    scene.add(lightningGroup);
 
     const sphereGroup = new Group();
 
@@ -251,6 +298,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: lightning1Color,
         shouldInvert: bool(false),
         xOffset: 0,
+        _texture: lightningTexture,
       }),
     });
 
@@ -268,6 +316,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: lightning2Color,
         shouldInvert: bool(false),
         xOffset: 0.5,
+        _texture: lightningTexture,
       }),
     });
 
@@ -286,6 +335,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
         baseColor: color("#000000"),
         shouldInvert: bool(false),
         xOffset: 0,
+        _texture: lightningTexture,
       }),
     });
 
@@ -293,7 +343,7 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
     sphereDark.scale.set(1.4, 1.4, 1.4);
     sphereGroup.add(sphereDark);
 
-    scene.add(sphereGroup);
+    // scene.add(sphereGroup);
 
     // scene.add(sphere2);
     // const sphereDark = new Mesh(sphereGeometry, lightningDarkMaterial);
@@ -413,6 +463,11 @@ export function useExperience(ref: Ref<HTMLCanvasElement | null>) {
       .name("黑色闪电 Y 轴缩放");
     lightning1Folder.addColor(lightning1Color, "value").name("闪电1颜色");
     lightning2Folder.addColor(lightning2Color, "value").name("闪电2颜色");
+
+    const lightningOuterFolder = gui.addFolder("外层闪电");
+    lightningOuterFolder
+      .add(lightningOuterThreshold, "value", 0, 1, 0.01)
+      .name("外层闪电阈值");
 
     const bloomGui = gui.addFolder("bloom");
     bloomGui.add(bloomPass.strength, "value", 0, 10, 0.01).name("strength");
