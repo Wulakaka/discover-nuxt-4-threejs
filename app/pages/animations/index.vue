@@ -3,7 +3,8 @@
 // import TransformBox from "./components/TransformBox.vue";
 // import CardHover from "./components/CardHover.vue";
 // import Toaster from "./components/Toaster.vue";
-import Orbit from "./components/Orbit.vue";
+// import Orbit from "./components/Orbit.vue";
+import Orbit from "./components/Orbit2.vue";
 </script>
 
 <template>
