@@ -2,14 +2,16 @@
 // import ToggleButton from "./components/ToggleButton.vue";
 // import TransformBox from "./components/TransformBox.vue";
 // import CardHover from "./components/CardHover.vue";
-import Toaster from "./components/Toaster.vue";
+// import Toaster from "./components/Toaster.vue";
+import Orbit from "./components/Orbit.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
     <!-- <ToggleButton />
     <TransformBox /> -->
-    <Toaster />
+    <!-- <Toaster /> -->
+    <Orbit />
   </div>
 </template>
 
