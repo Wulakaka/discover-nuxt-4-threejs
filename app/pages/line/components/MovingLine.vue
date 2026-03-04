@@ -1,6 +1,7 @@
 <script setup lang="ts" async>
-import {Align, Line2} from "@tresjs/cientos";
-import {CatmullRomCurve3, Vector3} from "three";
+import {Line2, useTexture} from "@tresjs/cientos";
+import {CatmullRomCurve3, Vector3, RepeatWrapping} from "three";
+import img from "@/assets/png/texture.png";
 
 const props = defineProps<{
   data: {x: string; y: string; z: string}[];
@@ -28,6 +29,14 @@ onRender(({elapsed, delta}) => {
     arrowRef.value.lookAt(position.clone().add(tangent));
   }
 });
+
+const {state: texture} = useTexture(img);
+whenever(texture, () => {
+  texture.value.wrapS = RepeatWrapping;
+  texture.value.wrapT = RepeatWrapping;
+  texture.value.repeat.set(2, 20);
+  texture.value.rotation = Math.PI / 2;
+});
 </script>
 
 <template>
@@ -46,5 +55,9 @@ onRender(({elapsed, delta}) => {
         <TresMeshBasicMaterial color="white" />
       </TresMesh>
     </TresGroup>
+    <TresMesh v-if="texture" :position-x="-20">
+      <TresTubeGeometry :args="[curve, 100, 1, 8, false]" />
+      <TresMeshBasicMaterial :map="texture" :side="2" />
+    </TresMesh>
   </TresGroup>
 </template>
