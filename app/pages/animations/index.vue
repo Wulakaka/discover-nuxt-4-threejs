@@ -5,12 +5,13 @@
 // import Toaster from "./components/Toaster.vue";
 // import Orbit from "./components/Orbit.vue";
 // import OrbitCoin2 from "./components/OrbitCoin2.vue";
-import ClipTheme from "./components/ClipTheme.vue";
+// import ClipTheme from "./components/ClipTheme.vue";
+import ClipButton from "./components/ClipButton.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
-    <ClipTheme />
+    <ClipButton />
   </div>
 </template>
 
