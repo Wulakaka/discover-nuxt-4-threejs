@@ -6,12 +6,13 @@
 // import Orbit from "./components/Orbit.vue";
 // import OrbitCoin2 from "./components/OrbitCoin2.vue";
 // import ClipTheme from "./components/ClipTheme.vue";
-import ClipButton from "./components/ClipButton.vue";
+// import ClipButton from "./components/ClipButton.vue";
+import ComparisonSlider from "./components/ComparisonSlider.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
-    <ClipButton />
+    <ComparisonSlider />
   </div>
 </template>
 
