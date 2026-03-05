@@ -4,7 +4,7 @@
 // import CardHover from "./components/CardHover.vue";
 // import Toaster from "./components/Toaster.vue";
 // import Orbit from "./components/Orbit.vue";
-import Orbit from "./components/Orbit2.vue";
+import OrbitCoin2 from "./components/OrbitCoin2.vue";
 </script>
 
 <template>
@@ -12,7 +12,7 @@ import Orbit from "./components/Orbit2.vue";
     <!-- <ToggleButton />
     <TransformBox /> -->
     <!-- <Toaster /> -->
-    <Orbit />
+    <OrbitCoin2 />
   </div>
 </template>
 
