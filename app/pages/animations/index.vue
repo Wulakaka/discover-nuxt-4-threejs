@@ -4,15 +4,13 @@
 // import CardHover from "./components/CardHover.vue";
 // import Toaster from "./components/Toaster.vue";
 // import Orbit from "./components/Orbit.vue";
-import OrbitCoin2 from "./components/OrbitCoin2.vue";
+// import OrbitCoin2 from "./components/OrbitCoin2.vue";
+import ClipTheme from "./components/ClipTheme.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
-    <!-- <ToggleButton />
-    <TransformBox /> -->
-    <!-- <Toaster /> -->
-    <OrbitCoin2 />
+    <ClipTheme />
   </div>
 </template>
 
