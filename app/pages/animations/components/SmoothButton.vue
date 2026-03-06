@@ -8,6 +8,21 @@ const buttonCopy = {
   success: () => h("span", "Login link sent!"),
 };
 
+const variants = {
+  initial: {
+    y: -25,
+    opacity: 0,
+  },
+  animate: {
+    y: 0,
+    opacity: 1,
+  },
+  exit: {
+    y: 25,
+    opacity: 0,
+  },
+};
+
 const buttonState = ref<keyof typeof buttonCopy>("idle");
 
 function setButtonState(state: keyof typeof buttonCopy) {
@@ -38,19 +53,11 @@ function handleClick() {
       <AnimatePresence :initial="false" mode="popLayout">
         <motion.span
           :key="buttonState"
+          :variants="variants"
+          initial="initial"
+          animate="animate"
+          exit="exit"
           :transition="{type: 'spring', duration: 0.3, bounce: 0}"
-          :initial="{
-            y: '-100%',
-            opacity: 0,
-          }"
-          :animate="{
-            y: '0%',
-            opacity: 1,
-          }"
-          :exit="{
-            y: '100%',
-            opacity: 0,
-          }"
         >
           <component :is="buttonCopy[buttonState]" />
         </motion.span>
