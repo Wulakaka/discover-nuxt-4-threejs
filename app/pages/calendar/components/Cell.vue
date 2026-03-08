@@ -14,18 +14,18 @@ const to = dayjs(from).add(props.data.duration, "minute");
 
 <template>
   <div
-    class="absolute inset-x-0 px-2 rounded-lg text-white text-sm flex justify-evenly flex-col"
+    class="absolute inset-x-0 px-2 rounded-lg text-white text-sm flex justify-evenly flex-col text-shadow-amber-950 text-shadow-md font-bold"
     :style="{
       top: y(from) + '%',
       height: y(to) - y(from) + '%',
     }"
     :class="data.class"
   >
-    <div class="text-xl font-bold">
+    <div class="text-xl">
       {{ data.name }}
       <!-- <span class="font-semibold">{{ data.duration }} 分钟</span> -->
     </div>
-    <div>
+    <div class="">
       <span>{{ dayjs(from).format("HH:mm") }}</span> -
       <span>{{ dayjs(to).format("HH:mm") }}</span>
     </div>

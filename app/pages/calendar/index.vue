@@ -4,7 +4,7 @@ import {list} from "./data";
 </script>
 
 <template>
-  <div class="w-screen h-screen grid grid-cols-7 gap-6 p-8">
+  <div class="w-screen h-screen grid grid-cols-7 gap-6">
     <Column v-for="(item, index) in list" :key="index" :data="item" />
   </div>
 </template>
