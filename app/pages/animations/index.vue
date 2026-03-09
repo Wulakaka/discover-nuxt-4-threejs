@@ -8,12 +8,14 @@
 // import ClipTheme from "./components/ClipTheme.vue";
 // import ClipButton from "./components/ClipButton.vue";
 // import ComparisonSlider from "./components/ComparisonSlider.vue";
-import MotionBase from "./components/MotionBase.vue";
+import SharedLayout from "./components/SharedLayout.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
-    <MotionBase />
+    <ClientOnly>
+      <SharedLayout />
+    </ClientOnly>
   </div>
 </template>
 

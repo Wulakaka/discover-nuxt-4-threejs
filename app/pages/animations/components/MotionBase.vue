@@ -2,6 +2,7 @@
 import SmoothButton from "./SmoothButton.vue";
 import DynamicHeight from "./DynamicHeight.vue";
 import CopyButton from "./CopyButton.vue";
+import CardLayout from "./CardLayout.vue";
 </script>
 
 <template>
@@ -11,6 +12,7 @@ import CopyButton from "./CopyButton.vue";
     <CopyButton />
     <SmoothButton />
     <DynamicHeight />
+    <CardLayout />
   </div>
 </template>
 
