@@ -8,13 +8,14 @@
 // import ClipTheme from "./components/ClipTheme.vue";
 // import ClipButton from "./components/ClipButton.vue";
 // import ComparisonSlider from "./components/ComparisonSlider.vue";
-import SharedLayout from "./components/SharedLayout.vue";
+// import SharedLayout from "./components/SharedLayout.vue";
+import AppEffect from "./components/AppEffect.vue";
 </script>
 
 <template>
   <div class="flex justify-center items-center h-screen gap-10">
     <ClientOnly>
-      <SharedLayout />
+      <AppEffect />
     </ClientOnly>
   </div>
 </template>
