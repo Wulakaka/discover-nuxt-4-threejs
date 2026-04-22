@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Cell from "./Cell.vue";
-import type {ItemGroup} from "../types";
+import type {ItemGroup} from "@/types";
 
 defineProps<{
   data: ItemGroup;

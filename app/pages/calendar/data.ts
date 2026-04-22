@@ -1,4 +1,4 @@
-import type {ItemGroup} from "./types";
+import type {ItemGroup} from "@/types";
 
 export const list: ItemGroup[] = [
   {
