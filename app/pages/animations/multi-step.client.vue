@@ -1,7 +1,11 @@
 <script setup lang="tsx">
-import {AnimatePresence, motion, MotionConfig} from "motion-v";
+import {AnimatePresence, motion, MotionConfig, type Options} from "motion-v";
 
 const currentStep = ref(0);
+
+type Direction = 1 | -1;
+
+const direction = ref<Direction>(1);
 
 const el = useTemplateRef("el");
 const {height} = useElementBounding(el);
@@ -61,18 +65,30 @@ const content = computed(() => {
       return null;
   }
 });
+
+const variants: Options["variants"] = {
+  initial: (direction) => ({
+    x: `${110 * direction}%`,
+    opacity: 0,
+  }),
+  animate: {x: 0, opacity: 1},
+  exit: (direction) => ({x: `${-110 * direction}%`, opacity: 0}),
+};
 </script>
 
 <template>
   <MotionConfig :transition="{duration: 0.5, type: 'spring', bounce: 0}">
+    {{ direction }}
     <motion.div :animate="{height}" class="multi-step-wrapper">
       <div ref="el" class="multi-step-inner">
-        <AnimatePresence mode="popLayout" :initial="false">
+        <AnimatePresence mode="popLayout" :initial="false" :custom="direction">
           <motion.div
             :key="currentStep"
-            :initial="{x: '110%', opacity: 0}"
-            :animate="{x: 0, opacity: 1}"
-            :exit="{x: '-110%', opacity: 0}"
+            :variants="variants"
+            :custom="direction"
+            initial="initial"
+            animate="animate"
+            exit="exit"
             class="multi-step-content"
           >
             <component :is="content" />
@@ -87,6 +103,7 @@ const content = computed(() => {
                 if (currentStep === 0) {
                   return;
                 }
+                direction = -1;
                 currentStep--;
               }
             "
@@ -100,8 +117,10 @@ const content = computed(() => {
               () => {
                 if (currentStep === 2) {
                   currentStep = 0;
+                  direction = -1;
                   return;
                 }
+                direction = 1;
                 currentStep++;
               }
             "
