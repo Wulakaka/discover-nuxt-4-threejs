@@ -16,10 +16,9 @@ import * as THREE from "three/webgpu";
 const size = 8;
 
 const {node} = (() => {
-  const textureData = new Float32Array(size * size * 4);
+  const textureData = new Uint8Array(size * size * 4);
   for (let i = 0; i < size * size; i++) {
-    const i4 = i * 4;
-    textureData[i4] = Math.random();
+    textureData[i * 4] = Math.random() * 255;
   }
   const textureHeight = new THREE.DataTexture(
     textureData,
@@ -29,17 +28,17 @@ const {node} = (() => {
   );
 
   // 延伸而不是重复
-  textureHeight.wrapS = THREE.ClampToEdgeWrapping;
-  textureHeight.wrapT = THREE.ClampToEdgeWrapping;
+  // textureHeight.wrapS = THREE.ClampToEdgeWrapping;
+  // textureHeight.wrapT = THREE.ClampToEdgeWrapping;
 
   textureHeight.needsUpdate = true;
 
-  // useIntervalFn(() => {
-  //   for (let i = 0; i < textureData.length; i++) {
-  //     textureData[i] = Math.random();
-  //   }
-  //   textureHeight.needsUpdate = true;
-  // }, 1000);
+  useIntervalFn(() => {
+    for (let i = 0; i < textureData.length; i += 4) {
+      textureData[i] = Math.random() * 255;
+    }
+    textureHeight.needsUpdate = true;
+  }, 1000);
 
   const positionNode = Fn(() => {
     const s = float(size);
@@ -60,10 +59,11 @@ const {node} = (() => {
     const hR = texture(textureHeight, uv.add(vec2(d, 0))).r;
     const hD = texture(textureHeight, uv.add(vec2(0, d.negate()))).r;
     const hU = texture(textureHeight, uv.add(vec2(0, d))).r;
-    const n = vec3(d.mul(2), hR.sub(h), 0)
-      .cross(vec3(0, hU.sub(h), d.mul(2)))
-      .negate()
-      .normalize();
+    const dHx = hR.sub(h);
+    const dHz = hU.sub(h);
+    const tx = vec3(d, dHx, 0);
+    const tz = vec3(0, dHz, d);
+    const n = tz.cross(tx).normalize();
     return positionLocal.y
       .greaterThan(s.div(2))
       .select(transformNormalToView(n), transformNormalToView(normalLocal));
@@ -83,7 +83,8 @@ const material = new THREE.MeshStandardNodeMaterial({
   color: "hotpink",
   positionNode: node.positionNode(),
   normalNode: node.normalNode(),
-  wireframe: true,
+  // flatShading: false,
+  // wireframe: true,
 });
 
 const planeMaterial = new THREE.MeshBasicNodeMaterial({
