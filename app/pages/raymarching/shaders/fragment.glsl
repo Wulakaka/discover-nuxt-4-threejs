@@ -1,9 +1,10 @@
 uniform vec2 uResolution;
 uniform float uTime;
 
-#define MAX_STEPS 100
+#define MAX_STEPS 50
 #define MAX_DIST 100.0
 #define SURF_DIST 0.01
+#define inf 1e10
 
 // I recommend setting up your codebase with glsify so you can import these functions
 // This function comes from glsl-rotate https://github.com/dmnsgn/glsl-rotate/blob/main/rotation-3d.glsl
@@ -77,11 +78,14 @@ float cnoise(vec2 P) {
   return 2.3 * n_xy;
 }
 
-// Tweaked Cosine color palette function from Inigo Quilez
 // 调整后的余弦调色板函数来自 Inigo Quilez
+// Tweaked Cosine color palette function from Inigo Quilez
 vec3 getColor(float amount) {
-  vec3 color = vec3(0.3, 0.5, 0.9) + vec3(0.9, 0.4, 0.2) * cos(6.2831 * (vec3(0.30, 0.20, 0.20) + amount * vec3(1.0)));
+  vec3 color = vec3(0.4, 0.4, 0.9) + vec3(0.5) * cos(6.2831 * (vec3(0.00, 0.15, 0.20) + amount * vec3(1.0, 0.7, 0.4)));
   return color * amount;
+}
+vec3 repeat(vec3 p, float c) {
+  return mod(p, c) - 0.5 * c;
 }
 
 float sdSphere(vec3 p, float radius) {
@@ -103,16 +107,28 @@ float sdBox(vec3 p, vec3 b) {
   return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
+// The SDF of this cross is 3 box stretched to infinity along all 3 axis
+float sdCross(vec3 p) {
+  float da = sdBox(p.xyz, vec3(inf, 1.0, 1.0));
+  float db = sdBox(p.yzx, vec3(1.0, inf, 1.0));
+  float dc = sdBox(p.zxy, vec3(1.0, 1.0, inf));
+  return min(da, min(db, dc));
+}
+
 float scene(vec3 p) {
-  vec3 p1 = rotate(p, vec3(1.0), uTime * 0.4);
-  float sphere = sdSphere(p1, 1.5);
+  vec3 p1 = rotate(p, vec3(1.0, 1.0, sin(uTime * 0.4)), uTime * 0.3);
+  float d = sdBox(p1, vec3(6.0));
+  float scale = 1.0;
 
-  float scale = 8.0 + 6.0 * sin(uTime * 0.5);
-  float sine = (0.8 - sdSine(p1 * scale)) / (scale * 2.0);
+  for(int m = 0; m < 4; m++) {
+    vec3 a = mod(p1 * scale, 2.0) - 1.0;
+    scale *= 2.0;
+    vec3 r = 1.0 - 3.0 * abs(a);
+    float c = sdCross(r) / scale;
 
-  float distance = max(sphere, sine);
-
-  return distance;
+    d = max(d, c);
+  }
+  return d;
 }
 
 float raymarch(vec3 ro, vec3 rd) {
@@ -162,13 +178,12 @@ void main() {
   uv -= 0.5;
   uv.x *= uResolution.x / uResolution.y;
 
-  // Light Position
-  vec3 lightPosition = vec3(-10.0 * cos(uTime), 10.0 * sin(uTime), 10.0 * abs(sin(-uTime * 0.5)));
+   // Light Position
+  vec3 lightPosition = vec3(-1.0, 20.0, 20.0);
 
-  // Ray Origin - camera
-  vec3 ro = vec3(0.0, 0.0, 5.0);
-  // Ray Direction
+  vec3 ro = vec3(0.0, 0.0, 25.0);
   vec3 rd = normalize(vec3(uv, -1.0));
+
   // Raymarching
   float d = raymarch(ro, rd);
   vec3 p = ro + rd * d;
@@ -181,7 +196,7 @@ void main() {
     float diffuse = max(dot(normal, lightDirection), 0.0);
     float shadows = softShadows(p, lightDirection, 0.1, 5.0, 64.0);
 
-    color = vec3(1.0) * getColor(diffuse * shadows);
+    color = vec3(1.0, 1.0, 1.0) * getColor(diffuse * shadows);
   }
 
   gl_FragColor = vec4(color, 1.0);
