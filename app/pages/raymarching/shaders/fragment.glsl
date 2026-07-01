@@ -10,8 +10,14 @@ float sdSphere(vec3 p, float radius) {
 }
 
 float scene(vec3 p) {
-  float distance = sdSphere(p, 1.0);
-  return distance;
+  // plane 的位置在 y = -1.0
+  float plane = p.y + 1.0;
+  float sphere1 = sdSphere(p - vec3(1.0 + cos(uTime), 0.7, 0.0), 1.0);
+  float sphere2 = sdSphere(p + vec3(1.0, 0.5 + sin(uTime) / 2.0, 0.0), 1.0);
+
+  float distance1 = min(sphere1, sphere2);
+  float distance2 = min(plane, distance1);
+  return distance2;
 }
 
 float raymarch(vec3 ro, vec3 rd) {
