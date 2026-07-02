@@ -173,7 +173,7 @@ float softShadows(vec3 ro, vec3 rd, float mint, float maxt, float k) {
 
 void main() {
 
-  // 将uv中心变为(0,0)，y轴范围为[-1,1]，x轴范围为[-aspect, aspect]
+  // 将uv中心变为(0,0)，y轴范围为[-1,1]，x轴范围为[-aspect * 0.5, aspect * 0.5]
   vec2 uv = gl_FragCoord.xy / uResolution.xy;
   uv -= 0.5;
   uv.x *= uResolution.x / uResolution.y;
