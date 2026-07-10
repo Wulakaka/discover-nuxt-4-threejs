@@ -1,5 +1,6 @@
 varying vec3 vNormal;
 varying vec3 vViewDir;
+varying vec3 vObjPos;
 
 void main() {
 
@@ -10,6 +11,8 @@ void main() {
   vec4 modelNormal = modelMatrix * vec4(normal, 0.0);
   vNormal = modelNormal.xyz;
   vViewDir = normalize(modelPosition.xyz - cameraPosition);
+
+  vObjPos = modelPosition.xyz;
 
   gl_Position = projectionPosition;
 }
