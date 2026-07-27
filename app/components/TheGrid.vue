@@ -12,6 +12,8 @@ import {
   uniform,
   Fn,
   mix,
+  vec4,
+  max,
 } from "three/tsl";
 
 interface Props {
@@ -64,8 +66,10 @@ const outColor = mix(colorCell, colorSection, colorSection.step(0.001)).mul(
   circle,
 );
 
+const alpha = max(gridSection, gridCell).mul(circle).clamp(0.0, 1.0);
+
 const gridMaterial = new MeshBasicNodeMaterial({
-  colorNode: outColor,
+  colorNode: vec4(outColor, alpha),
   positionNode: positionLocal,
   transparent: true,
   side: 2, // double-sided
