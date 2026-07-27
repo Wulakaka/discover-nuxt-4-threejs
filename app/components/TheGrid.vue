@@ -9,9 +9,9 @@ import {
   positionLocal,
   smoothstep,
   uv,
-  vec4,
   uniform,
   Fn,
+  mix,
 } from "three/tsl";
 
 interface Props {
@@ -52,18 +52,17 @@ const getGrid = Fn(
 
 const circle = uv().sub(0.5).length().mul(2.0).pow(4.0).oneMinus();
 
-const grid1 = getGrid({cellCount: 20, lineWidth: 1.3});
+const gridSection = getGrid({cellCount: 20, lineWidth: 1.3});
 
-const grid2 = getGrid({cellCount: 60, lineWidth: 0.8});
+const gridCell = getGrid({cellCount: 60, lineWidth: 0.8});
 
-const line1Color = color(uSectionColor);
+const colorSection = color(uSectionColor).mul(gridSection);
 
-const line2Color = color(uCellColor);
+const colorCell = color(uCellColor).mul(gridCell).mul(0.25);
 
-const color1 = line1Color.mul(grid1);
-const color2 = line2Color.mul(grid2);
-
-const outColor = vec4(color1.max(color2), circle);
+const outColor = mix(colorCell, colorSection, colorSection.step(0.001)).mul(
+  circle,
+);
 
 const gridMaterial = new MeshBasicNodeMaterial({
   colorNode: outColor,
