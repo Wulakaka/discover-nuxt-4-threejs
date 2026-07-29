@@ -62,8 +62,10 @@ const colorCell = color(uCellColor).mul(gridCell).mul(0.25);
 
 const outColor = mix(colorCell, colorSection, colorSection.step(0.001));
 
+const mappedColor = outColor.toneMapping(THREE.ACESFilmicToneMapping);
+
 const gridMaterial = new MeshBasicNodeMaterial({
-  colorNode: outColor,
+  colorNode: mappedColor,
   opacityNode: circle,
   positionNode: positionLocal,
   transparent: true,
