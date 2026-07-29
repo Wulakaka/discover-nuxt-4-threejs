@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import {MeshBasicNodeMaterial} from "three/webgpu";
 import * as THREE from "three/webgpu";
 import {
   abs,
@@ -30,23 +29,28 @@ const uCellColor = uniform(new THREE.Color(props.cellColor));
 
 const getGrid = Fn(
   ({cellCount, lineWidth}: {cellCount: number; lineWidth: number}) => {
-    // 10 cells along U, one line at each cell center => exactly 10 lines.
     const cellX = uv().x.mul(cellCount);
     const distToCenterX = abs(cellX.fract().sub(0.5));
     const cellY = uv().y.mul(cellCount);
     const distToCenterY = abs(cellY.fract().sub(0.5));
 
-    // Convert UV distance to pixel distance so width stays constant in screen space.
+    // 转换 UV 距离为像素距离，以便宽度在屏幕空间中保持不变。
+    // fwidth() 返回一个值，表示当前片段在屏幕空间中相对于其邻居的变化率。通过将距离除以 fwidth，我们可以获得一个近似的像素距离。
+    // 当平面因透视、缩放或距离变化导致 UV 在屏幕上的密度改变时，fwidth(cellX) 也会同步变化
     const distPx1 = distToCenterX.div(fwidth(cellX));
     const distPx2 = distToCenterY.div(fwidth(cellY));
     const distPx = distPx1.min(distPx2);
 
-    const halfWidthPx = float(lineWidth).mul(0.5); // 2px total width
-    const aa = float(0.5); // anti-alias transition in pixels
-    const lineMask = float(1.0).sub(
-      smoothstep(halfWidthPx.sub(aa), halfWidthPx.add(aa), distPx),
-    );
-    return lineMask.step(0.5);
+    // 半线宽
+    const halfWidthPx = float(lineWidth).mul(0.5);
+    // 创建一像素的平滑边缘，以避免锯齿。smoothstep() 在给定的边界范围内创建一个平滑的过渡。
+    const aa = float(0.5);
+    const lineMask = smoothstep(
+      halfWidthPx.sub(aa),
+      halfWidthPx.add(aa),
+      distPx,
+    ).oneMinus();
+    return lineMask;
   },
 );
 
@@ -64,7 +68,7 @@ const outColor = mix(colorCell, colorSection, colorSection.step(0.001));
 
 const mappedColor = outColor.toneMapping(THREE.ACESFilmicToneMapping);
 
-const gridMaterial = new MeshBasicNodeMaterial({
+const gridMaterial = new THREE.MeshStandardNodeMaterial({
   colorNode: mappedColor,
   opacityNode: circle,
   positionNode: positionLocal,
