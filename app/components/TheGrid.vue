@@ -66,11 +66,9 @@ const colorCell = color(uCellColor).mul(gridCell).mul(0.25);
 
 const outColor = mix(colorCell, colorSection, colorSection.step(0.001));
 
-const mappedColor = outColor.toneMapping(THREE.ACESFilmicToneMapping);
-
 const gridMaterial = new THREE.MeshStandardNodeMaterial({
-  colorNode: mappedColor,
-  opacityNode: circle,
+  colorNode: outColor.toneMapping(THREE.ACESFilmicToneMapping),
+  opacityNode: circle.mul(gridSection.add(gridCell).clamp(0.0, 1.0)),
   positionNode: positionLocal,
   transparent: true,
   side: 2, // double-sided
