@@ -7,12 +7,11 @@ import {WebGPURenderer, NoToneMapping} from "three/webgpu";
 import TheShield from "../components/TheShield.vue";
 import TheGrid from "../../../components/TheGrid.vue";
 import {Inspector} from "three/addons/inspector/Inspector.js";
+import {INSPECTOR_KEY} from "../INJECTION_KEYS.js";
 
 const inspector = new Inspector();
 
-const gui = inspector.createParameters("Params");
-
-provide("gui", gui);
+provide(INSPECTOR_KEY, inspector);
 
 // Create WebGPU renderer factory
 const createWebGPURenderer = (ctx: TresRendererSetupContext) => {

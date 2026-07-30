@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import {color} from "three/tsl";
+import {color, uniform} from "three/tsl";
 import * as THREE from "three/webgpu";
+import {INSPECTOR_KEY} from "../INJECTION_KEYS";
 
-const c = new THREE.Color("#00ff00");
+const inspector = inject(INSPECTOR_KEY);
 
-const outColor = color(c);
+const gui = inspector?.createParameters("Params");
+
+const uColor = uniform(new THREE.Color("#00ff00"));
+
+gui?.addColor(uColor, "value").name("Sphere Color");
+
+const outColor = color(uColor);
 
 const material = new THREE.MeshBasicNodeMaterial({
   colorNode: outColor,
