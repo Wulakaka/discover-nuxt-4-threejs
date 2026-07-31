@@ -5,6 +5,7 @@ import {
   float,
   Fn,
   If,
+  max,
   mx_noise_float,
   normalView,
   positionLocal,
@@ -26,7 +27,9 @@ const uColor = uniform(new THREE.Color("#00ff00"));
 
 const uFresnelPower = uniform(1.8);
 
-const uFresnelStrength = uniform(float(1.0));
+const uHexOpacity = uniform(0.13);
+
+const uFresnelStrength = uniform(float(1.75));
 
 const {
   hexPattern,
@@ -46,7 +49,9 @@ const uFlowIntensity = uniform(4.0);
 
 gui?.addColor(uColor, "value").name("Sphere Color");
 gui?.add(uFresnelPower, "value", 0.5, 5, 0.1).name("Fresnel Power");
+gui?.add(uFresnelStrength, "value", 0, 3, 0.05).name("Fresnel Strength");
 gui?.add(uHexScale, "value", 1, 20, 0.5).name("Hex Scale");
+gui?.add(uHexOpacity, "value", 0, 1, 0.01).name("Hex Opacity");
 gui?.add(uEdgeWidth, "value", 0.01, 0.2, 0.005).name("Edge Width");
 gui?.add(uFlashSpeed, "value", 0.5, 8, 0.1).name("Flash Speed");
 gui?.add(uFlashIntensity, "value", 0, 1, 0.1).name("Flash Intensity");
@@ -87,7 +92,7 @@ const absN = positionLocal.normalize().abs();
 
 // 接缝处
 // 颜色是从根号2/2处开始显示的，也就是接缝处大约在0.71的位置
-const dominance = absN.x.max(absN.y).max(absN.z);
+const dominance = max(absN.x, absN.y, absN.z);
 const hexFade = dominance.smoothstep(0.65, 0.85);
 
 const faceUV = Fn(() => {
@@ -111,10 +116,11 @@ const faceUV = Fn(() => {
 const hex = hexPattern(faceUV).mul(hexFade);
 
 const cId = hexCellId(faceUV);
-const flash = cellFlash(cId);
+// 乘以 hexFade 是为了让接缝隐藏
+const flash = cellFlash(cId).mul(hexFade);
 
 const intensity = add(
-  hex.mul(float(0.3).add(fresnel.mul(0.7))), // 让边缘的六边形更亮
+  hex.mul(uHexOpacity).mul(float(0.3).add(fresnel.mul(0.7))), // 让边缘的六边形更亮
   fresnel.mul(0.4), // 再加入 fresnel 辉光
   flash,
 );
