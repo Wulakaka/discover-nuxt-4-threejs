@@ -5,12 +5,15 @@ import {
   float,
   Fn,
   If,
+  mx_noise_float,
   normalView,
   positionLocal,
   positionViewDirection,
   pow,
+  time,
   uniform,
   vec2,
+  vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import {INSPECTOR_KEY} from "../INJECTION_KEYS";
@@ -37,20 +40,46 @@ const {
   flashIntensity: 0.11,
 });
 
+const uFlowSpeed = uniform(1.13);
+const uFlowScale = uniform(2.4);
+const uFlowIntensity = uniform(4.0);
+
 gui?.addColor(uColor, "value").name("Sphere Color");
 gui?.add(uFresnelPower, "value", 0.5, 5, 0.1).name("Fresnel Power");
 gui?.add(uHexScale, "value", 1, 20, 0.5).name("Hex Scale");
 gui?.add(uEdgeWidth, "value", 0.01, 0.2, 0.005).name("Edge Width");
 gui?.add(uFlashSpeed, "value", 0.5, 8, 0.1).name("Flash Speed");
 gui?.add(uFlashIntensity, "value", 0, 1, 0.1).name("Flash Intensity");
+gui?.add(uFlowSpeed, "value", 0, 2, 0.01).name("Flow Speed");
+gui?.add(uFlowScale, "value", 0.1, 8, 0.01).name("Flow Scale");
+gui?.add(uFlowIntensity, "value", 0, 4, 0.01).name("Flow Intensity");
 
-const outColor = color(uColor).toVar();
+const lColor = color(uColor);
 
 // —— Fresnel ————————————————————————————————
 const fresnel = pow(
   normalView.dot(positionViewDirection).oneMinus(),
   uFresnelPower,
 ).mul(uFresnelStrength);
+
+// —— Flow Noise ————————————————————————————————
+const flowNoise = add(
+  mx_noise_float(
+    positionLocal.mul(uFlowScale).add(vec3(time, time.mul(0.6), time.mul(0.4))),
+    0.3,
+    0.3,
+  ),
+  mx_noise_float(
+    positionLocal
+      .mul(uFlowScale)
+      .mul(2.1)
+      .add(vec3(time.mul(-0.5), time.mul(0.9), time.mul(0.3))),
+    0.2,
+    0.2,
+  ),
+)
+  .mul(0.5)
+  .add(0.5);
 
 // —— 六边形 ————————————————————————————————
 // 找到需要显示的面
@@ -90,9 +119,14 @@ const intensity = add(
   flash,
 );
 
+const shieldColor = add(
+  lColor.mul(intensity).mul(2),
+  lColor.mul(uFlowIntensity).mul(flowNoise).mul(fresnel),
+);
+
 const material = new THREE.MeshBasicNodeMaterial({
-  colorNode: outColor,
-  opacityNode: intensity,
+  colorNode: shieldColor,
+  opacityNode: intensity.clamp(),
   transparent: true,
 });
 </script>
