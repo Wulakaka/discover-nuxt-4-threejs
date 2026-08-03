@@ -26,10 +26,12 @@ import {
   vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
-import {INSPECTOR_KEY} from "../INJECTION_KEYS";
 import type {PointerEvent} from "@pmndrs/pointer-events";
-import {MAX_HITS} from "../const";
 
+import {MAX_HITS} from "../const";
+import {INSPECTOR_KEY} from "../INJECTION_KEYS";
+
+// -- Component state ----------------------------------------------------------
 const inspector = inject(INSPECTOR_KEY);
 
 const gui = inspector?.createParameters("Force Shield");
@@ -40,6 +42,7 @@ const revealProgress = ref(1);
 
 const revealSpeed = ref(3.5);
 
+// -- Shader uniforms ----------------------------------------------------------
 const uTime = uniform(performance.now() / 1000);
 
 const uLife = uniform(1);
@@ -79,17 +82,12 @@ const uNoiseEdgeSmoothness = uniform(0.5);
 const uOpacity = uniform(0.75);
 const uFadeStart = uniform(0);
 
-const hitPositions = Array.from(
-  {
-    length: MAX_HITS,
-  },
-  () => new THREE.Vector3(),
-);
-
+// CPU-side ring buffer mirrored by the uniform arrays.
+const hitPositions = Array.from({length: MAX_HITS}, () => new THREE.Vector3());
 const hitTimes = Array.from({length: MAX_HITS}, () => -1);
 
-const uHitPos = uniformArray(hitPositions, "vec3");
-const uHitTime = uniformArray(hitTimes, "float");
+const uHitPositions = uniformArray(hitPositions, "vec3");
+const uHitTimes = uniformArray(hitTimes, "float");
 
 // 此处为单位为 弧度/秒，不是 米/秒
 const uHitRingSpeed = uniform(1.75);
@@ -100,6 +98,7 @@ const uHitIntensity = uniform(4.1);
 const uHitImpactRadius = uniform(0.3);
 const hitDamage = ref(5);
 
+// -- Debug controls -----------------------------------------------------------
 gui?.add(manualReveal, "value").name("Manual Reveal");
 gui?.add(revealProgress, "value", 0, 1, 0.01).name("↳ Reveal Progress");
 gui?.addColor(uColor, "value").name("Sphere Color");
@@ -142,15 +141,16 @@ hitGUI
   )
   .name("Reset Life");
 
-const lifeColor = Fn(([life]: [life: ReturnType<typeof float>]) => {
-  return mix(vec3(1.0, 0.08, 0.04), uColor, life);
-});
+// -- Shader helpers -----------------------------------------------------------
+const getLifeColor = Fn(([life]: [life: ReturnType<typeof float>]) =>
+  mix(vec3(1.0, 0.08, 0.04), uColor, life),
+);
 
 function resetLife() {
   uLife.value = 1;
 }
 
-// -- Reveal /dissolve
+// -- Shader graph: reveal/dissolve --------------------------------------------
 const noise = mx_noise_float(positionLocal.mul(uNoiseScale), 0.5, 0.5);
 const revealMask = smoothstep(uReveal.sub(uNoiseEdgeWidth), uReveal, noise);
 
@@ -171,13 +171,13 @@ const edgeHigh = smoothstep(
 // 相乘形成一个山峰形状
 const revealEdge = edgeLow.mul(edgeHigh.oneMinus());
 
-// —— Fresnel ————————————————————————————————
+// -- Fresnel ------------------------------------------------------------------
 const fresnel = pow(
   normalView.dot(positionViewDirection).oneMinus(),
   uFresnelPower,
 ).mul(uFresnelStrength);
 
-// —— Flow Noise ————————————————————————————————
+// -- Flow noise ---------------------------------------------------------------
 const flowNoise = add(
   mx_noise_float(
     positionLocal.mul(uFlowScale).add(vec3(time, time.mul(0.6), time.mul(0.4))),
@@ -194,7 +194,7 @@ const flowNoise = add(
   ),
 );
 
-// —— 六边形 ————————————————————————————————
+// -- Hex pattern --------------------------------------------------------------
 // 找到需要显示的面
 const absN = positionLocal.normalize().abs();
 
@@ -227,7 +227,7 @@ const cId = hexCellId(faceUV);
 // 乘以 hexFade 是为了让接缝隐藏
 const flash = cellFlash(cId).mul(hexFade);
 
-// -- Hit ring buffer
+// -- Hit effects --------------------------------------------------------------
 // 每个插槽：噪声化的圆环 + 初始六边形高亮区域
 
 const hitEffects = Fn(() => {
@@ -238,8 +238,8 @@ const hitEffects = Fn(() => {
   const hexHitBoost = float(0.0).toVar();
 
   Loop(MAX_HITS, ({i}) => {
-    const ht = uHitTime.element(i);
-    const hp = uHitPos.element(i);
+    const ht = uHitTimes.element(i);
+    const hp = uHitPositions.element(i);
     const elapsed = uTime.sub(ht);
 
     // 表示是否处于动画状态
@@ -254,12 +254,12 @@ const hitEffects = Fn(() => {
 
     // 扩展圆环 - 在 uHitMaxRadius 地方截断，在到达时渐隐
     // 环半径，随时间扩大，不超过 uHitMaxRadius
-    const ringR = min(elapsed.mul(uHitRingSpeed), uHitMaxRadius);
-    const noiseD = mx_noise_float(normPos.mul(5).add(vec3(elapsed.mul(2)))).mul(
-      0.05,
-    );
+    const ringRadius = min(elapsed.mul(uHitRingSpeed), uHitMaxRadius);
+    const distanceNoise = mx_noise_float(
+      normPos.mul(5).add(vec3(elapsed.mul(2))),
+    ).mul(0.05);
     // 在圆环上时，ring 为 1
-    const ring = abs(dist.add(noiseD).sub(ringR))
+    const ring = abs(dist.add(distanceNoise).sub(ringRadius))
       .smoothstep(0, uHitRingWidth)
       .oneMinus();
     // 持续时间超过一半时开始隐藏
@@ -267,7 +267,7 @@ const hitEffects = Fn(() => {
       .smoothstep(uHitDuration.mul(0.5), uHitDuration)
       .oneMinus();
     // 弧度超过 75% 时开始隐藏
-    const radialFade = ringR
+    const radialFade = ringRadius
       .smoothstep(uHitMaxRadius.mul(0.75), uHitMaxRadius)
       .oneMinus();
     ringContrib.addAssign(mul(ring, fade, radialFade, isActive));
@@ -286,9 +286,9 @@ const hitEffects = Fn(() => {
   return vec2(ringContrib, hexHitBoost);
 })();
 
-// -- Combine -----------------
+// -- Final composition --------------------------------------------------------
 
-const lColor = lifeColor(uLife);
+const lifeColor = getLifeColor(uLife);
 
 const ringContrib = hitEffects.x;
 const hexHitBoost = hitEffects.y;
@@ -306,12 +306,12 @@ const intensity = add(
 );
 
 const shieldColor = add(
-  lColor.mul(intensity).mul(2),
-  lColor.mul(uFlowIntensity).mul(flowNoise).mul(fresnel),
-  lColor.mul(ringContrib).mul(uHitIntensity),
+  lifeColor.mul(intensity).mul(2),
+  lifeColor.mul(uFlowIntensity).mul(flowNoise).mul(fresnel),
+  lifeColor.mul(ringContrib).mul(uHitIntensity),
 );
 
-const edgeColor = mix(uNoiseEdgeColor, lColor, uLife.oneMinus());
+const edgeColor = mix(uNoiseEdgeColor, lifeColor, uLife.oneMinus());
 const edgeGlow = mul(edgeColor, revealEdge, uNoiseEdgeIntensity);
 
 const normY = positionLocal.y.div(1.8);
@@ -329,6 +329,7 @@ const material = new THREE.MeshBasicNodeMaterial({
   transparent: true,
 });
 
+// -- Runtime updates and interaction -----------------------------------------
 const {onRender} = useLoop();
 onRender(({delta}) => {
   uTime.value = performance.now() / 1000;
