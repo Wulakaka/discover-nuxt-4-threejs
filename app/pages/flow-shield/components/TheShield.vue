@@ -6,11 +6,13 @@ import {
   Fn,
   If,
   max,
+  mix,
   mx_noise_float,
   normalView,
   positionLocal,
   positionViewDirection,
   pow,
+  smoothstep,
   time,
   uniform,
   vec2,
@@ -43,10 +45,17 @@ const {
   flashIntensity: 0.11,
 });
 
+const uReveal = uniform(0.5);
 const uFlowSpeed = uniform(1.13);
 const uFlowScale = uniform(2.4);
 const uFlowIntensity = uniform(4.0);
+const uNoiseScale = uniform(1.3);
+const uNoiseEdgeColor = uniform(new THREE.Color("#26aeff"));
+const uNoiseEdgeWidth = uniform(0.02);
+const uNoiseEdgeIntensity = uniform(10);
+const uNoiseEdgeSmoothness = uniform(0.5);
 
+gui?.add(uReveal, "value", 0, 1, 0.01).name("Reveal");
 gui?.addColor(uColor, "value").name("Sphere Color");
 gui?.add(uFresnelPower, "value", 0.5, 5, 0.1).name("Fresnel Power");
 gui?.add(uFresnelStrength, "value", 0, 3, 0.05).name("Fresnel Strength");
@@ -58,8 +67,36 @@ gui?.add(uFlashIntensity, "value", 0, 1, 0.1).name("Flash Intensity");
 gui?.add(uFlowSpeed, "value", 0, 2, 0.01).name("Flow Speed");
 gui?.add(uFlowScale, "value", 0.1, 8, 0.01).name("Flow Scale");
 gui?.add(uFlowIntensity, "value", 0, 4, 0.01).name("Flow Intensity");
+gui?.add(uNoiseScale, "value", 0.5, 10, 0.1).name("Noise Scale");
+gui?.addColor(uNoiseEdgeColor, "value").name("Noise Edge Color");
+gui?.add(uNoiseEdgeWidth, "value", 0.01, 0.5, 0.01).name("Noise Edge Width");
+gui?.add(uNoiseEdgeIntensity, "value", 0, 10, 0.1).name("Noise Edge Intensity");
+gui
+  ?.add(uNoiseEdgeSmoothness, "value", 0, 1, 0.01)
+  .name("Noise Edge Smoothness");
 
 const lColor = color(uColor);
+
+// -- Reveal /dissolve
+const noise = mx_noise_float(positionLocal.mul(uNoiseScale), 0.5, 0.5);
+const revealMask = smoothstep(uReveal.sub(uNoiseEdgeWidth), uReveal, noise);
+
+const innerFade = mix(0.98, 0.15, uNoiseEdgeSmoothness);
+const edgeLow = smoothstep(
+  uReveal.sub(uNoiseEdgeWidth),
+  uReveal.sub(uNoiseEdgeWidth.mul(innerFade)),
+  noise,
+);
+const edgeHigh = smoothstep(
+  uReveal.sub(uNoiseEdgeWidth.mul(0.15)),
+  uReveal,
+  noise,
+);
+
+// __/-- edgeLow
+// ---\_ edgeHigh.oneMinus()
+// 相乘形成一个山峰形状
+const revealEdge = edgeLow.mul(edgeHigh.oneMinus());
 
 // —— Fresnel ————————————————————————————————
 const fresnel = pow(
@@ -128,9 +165,14 @@ const shieldColor = add(
   lColor.mul(uFlowIntensity).mul(flowNoise).mul(fresnel),
 );
 
+const alpha = add(
+  intensity.mul(revealMask), // 溶解效果
+  revealEdge.mul(uNoiseEdgeIntensity), // 溶解边缘
+).clamp();
+
 const material = new THREE.MeshBasicNodeMaterial({
   colorNode: shieldColor,
-  opacityNode: intensity.clamp(),
+  opacityNode: alpha,
   transparent: true,
 });
 </script>
