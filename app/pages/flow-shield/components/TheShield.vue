@@ -35,6 +35,7 @@ import {INSPECTOR_KEY} from "../INJECTION_KEYS";
 const inspector = inject(INSPECTOR_KEY);
 
 const gui = inspector?.createParameters("Force Shield");
+// gui?.close();
 
 const manualReveal = ref(false);
 
@@ -113,9 +114,6 @@ gui?.add(uShowHex, "value").name("Show Hex");
 gui?.add(uEdgeWidth, "value", 0.01, 0.2, 0.005).name("Edge Width");
 gui?.add(uFlashSpeed, "value", 0.5, 8, 0.1).name("Flash Speed");
 gui?.add(uFlashIntensity, "value", 0, 1, 0.1).name("Flash Intensity");
-gui?.add(uFlowSpeed, "value", 0, 2, 0.01).name("Flow Speed");
-gui?.add(uFlowScale, "value", 0.1, 8, 0.01).name("Flow Scale");
-gui?.add(uFlowIntensity, "value", 0, 4, 0.01).name("Flow Intensity");
 gui?.add(uNoiseScale, "value", 0.5, 10, 0.1).name("Noise Scale");
 gui?.addColor(uNoiseEdgeColor, "value").name("Noise Edge Color");
 gui?.add(uNoiseEdgeWidth, "value", 0.01, 0.5, 0.01).name("Noise Edge Width");
@@ -123,6 +121,11 @@ gui?.add(uNoiseEdgeIntensity, "value", 0, 10, 0.1).name("Noise Edge Intensity");
 gui
   ?.add(uNoiseEdgeSmoothness, "value", 0, 1, 0.01)
   .name("Noise Edge Smoothness");
+
+const flowGUI = gui?.addFolder("FLow Noise");
+flowGUI?.add(uFlowSpeed, "value", 0, 2, 0.01).name("Speed");
+flowGUI?.add(uFlowScale, "value", 0.1, 8, 0.01).name("Scale");
+flowGUI?.add(uFlowIntensity, "value", 0, 4, 0.01).name("Intensity");
 
 const hitGUI = gui?.addFolder("Hit Effect");
 hitGUI?.add(uHitRingSpeed, "value", 0.1, 6, 0.01).name("Ring Speed");
