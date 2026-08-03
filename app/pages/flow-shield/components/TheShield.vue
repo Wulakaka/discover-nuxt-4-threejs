@@ -4,7 +4,6 @@ import {
   acos,
   add,
   clamp,
-  color,
   dot,
   float,
   Fn,
@@ -37,7 +36,9 @@ const gui = inspector?.createParameters("Params");
 
 const uTime = uniform(performance.now() / 1000);
 
-const uColor = uniform(new THREE.Color("#00ff00"));
+const uLife = uniform(1);
+
+const uColor = uniform(new THREE.Color("#26aeff"));
 
 const uFresnelPower = uniform(1.8);
 
@@ -88,6 +89,7 @@ const uHitMaxRadius = uniform(0.85);
 const uHitDuration = uniform(1.8);
 const uHitIntensity = uniform(4.1);
 const uHitImpactRadius = uniform(0.3);
+const hitDamage = ref(5);
 
 gui?.add(uReveal, "value", 0, 1, 0.01).name("Reveal");
 gui?.addColor(uColor, "value").name("Sphere Color");
@@ -117,8 +119,23 @@ hitGUI?.add(uHitMaxRadius, "value", 0.12, 3.14, 0.05).name("Ring Radius");
 hitGUI?.add(uHitDuration, "value", 0.5, 6, 0.1).name("Duration");
 hitGUI?.add(uHitIntensity, "value", 0, 8, 0.1).name("Intensity");
 hitGUI?.add(uHitImpactRadius, "value", 0.1, 1.5, 0.05).name("Impact Radius");
+hitGUI?.add(hitDamage, "value", 1, 100, 1).name("Damage %");
+hitGUI
+  ?.add(
+    {
+      resetLife,
+    },
+    "resetLife",
+  )
+  .name("Reset Life");
 
-const lColor = color(uColor);
+const lifeColor = Fn(([life]: [life: ReturnType<typeof float>]) => {
+  return mix(vec3(1.0, 0.08, 0.04), uColor, life);
+});
+
+function resetLife() {
+  uLife.value = 1;
+}
 
 // -- Reveal /dissolve
 const noise = mx_noise_float(positionLocal.mul(uNoiseScale), 0.5, 0.5);
@@ -256,6 +273,10 @@ const hitEffects = Fn(() => {
   return vec2(ringContrib, hexHitBoost);
 })();
 
+// -- Combine -----------------
+
+const lColor = lifeColor(uLife);
+
 const ringContrib = hitEffects.x;
 const hexHitBoost = hitEffects.y;
 
@@ -277,13 +298,16 @@ const shieldColor = add(
   lColor.mul(ringContrib).mul(uHitIntensity),
 );
 
+const edgeColor = mix(uNoiseEdgeColor, lColor, uLife.oneMinus());
+const edgeGlow = mul(edgeColor, revealEdge, uNoiseEdgeIntensity);
+
 const alpha = add(
   intensity.mul(revealMask), // 溶解效果
   revealEdge.mul(uNoiseEdgeIntensity), // 溶解边缘
 ).clamp();
 
 const material = new THREE.MeshBasicNodeMaterial({
-  colorNode: shieldColor,
+  colorNode: shieldColor.add(edgeGlow),
   opacityNode: alpha,
   transparent: true,
 });
@@ -303,6 +327,8 @@ function handleClick(e: PointerEvent<MouseEvent>) {
 
   hitPositions[idx]!.copy(localPoint);
   hitTimes[idx] = performance.now() / 1000;
+
+  uLife.value = Math.max(0, uLife.value - hitDamage.value / 100);
 }
 </script>
 
