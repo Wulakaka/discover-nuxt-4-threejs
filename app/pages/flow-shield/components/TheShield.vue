@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import {
+  abs,
+  acos,
   add,
+  clamp,
   color,
+  dot,
   float,
   Fn,
   If,
+  Loop,
   max,
+  min,
   mix,
+  mul,
   mx_noise_float,
   normalView,
   positionLocal,
@@ -15,15 +22,20 @@ import {
   smoothstep,
   time,
   uniform,
+  uniformArray,
   vec2,
   vec3,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import {INSPECTOR_KEY} from "../INJECTION_KEYS";
+import type {PointerEvent} from "@pmndrs/pointer-events";
+import {MAX_HITS} from "../const";
 
 const inspector = inject(INSPECTOR_KEY);
 
 const gui = inspector?.createParameters("Params");
+
+const uTime = uniform(performance.now() / 1000);
 
 const uColor = uniform(new THREE.Color("#00ff00"));
 
@@ -45,6 +57,8 @@ const {
   flashIntensity: 0.11,
 });
 
+const uShowHex = uniform(true);
+
 const uReveal = uniform(0.5);
 const uFlowSpeed = uniform(1.13);
 const uFlowScale = uniform(2.4);
@@ -55,12 +69,33 @@ const uNoiseEdgeWidth = uniform(0.02);
 const uNoiseEdgeIntensity = uniform(10);
 const uNoiseEdgeSmoothness = uniform(0.5);
 
+const hitPositions = Array.from(
+  {
+    length: MAX_HITS,
+  },
+  () => new THREE.Vector3(),
+);
+
+const hitTimes = Array.from({length: MAX_HITS}, () => -1);
+
+const uHitPos = uniformArray(hitPositions, "vec3");
+const uHitTime = uniformArray(hitTimes, "float");
+
+// 此处为单位为 弧度/秒，不是 米/秒
+const uHitRingSpeed = uniform(1.75);
+const uHitRingWidth = uniform(0.12);
+const uHitMaxRadius = uniform(0.85);
+const uHitDuration = uniform(1.8);
+const uHitIntensity = uniform(4.1);
+const uHitImpactRadius = uniform(0.3);
+
 gui?.add(uReveal, "value", 0, 1, 0.01).name("Reveal");
 gui?.addColor(uColor, "value").name("Sphere Color");
 gui?.add(uFresnelPower, "value", 0.5, 5, 0.1).name("Fresnel Power");
 gui?.add(uFresnelStrength, "value", 0, 3, 0.05).name("Fresnel Strength");
 gui?.add(uHexScale, "value", 1, 20, 0.5).name("Hex Scale");
 gui?.add(uHexOpacity, "value", 0, 1, 0.01).name("Hex Opacity");
+gui?.add(uShowHex, "value").name("Show Hex");
 gui?.add(uEdgeWidth, "value", 0.01, 0.2, 0.005).name("Edge Width");
 gui?.add(uFlashSpeed, "value", 0.5, 8, 0.1).name("Flash Speed");
 gui?.add(uFlashIntensity, "value", 0, 1, 0.1).name("Flash Intensity");
@@ -74,6 +109,14 @@ gui?.add(uNoiseEdgeIntensity, "value", 0, 10, 0.1).name("Noise Edge Intensity");
 gui
   ?.add(uNoiseEdgeSmoothness, "value", 0, 1, 0.01)
   .name("Noise Edge Smoothness");
+
+const hitGUI = gui?.addFolder("Hit Effect");
+hitGUI?.add(uHitRingSpeed, "value", 0.1, 6, 0.01).name("Ring Speed");
+hitGUI?.add(uHitRingWidth, "value", 0.01, 0.5, 0.01).name("Ring Width");
+hitGUI?.add(uHitMaxRadius, "value", 0.12, 3.14, 0.05).name("Ring Radius");
+hitGUI?.add(uHitDuration, "value", 0.5, 6, 0.1).name("Duration");
+hitGUI?.add(uHitIntensity, "value", 0, 8, 0.1).name("Intensity");
+hitGUI?.add(uHitImpactRadius, "value", 0.1, 1.5, 0.05).name("Impact Radius");
 
 const lColor = color(uColor);
 
@@ -154,15 +197,84 @@ const cId = hexCellId(faceUV);
 // 乘以 hexFade 是为了让接缝隐藏
 const flash = cellFlash(cId).mul(hexFade);
 
+// -- Hit ring buffer
+// 每个插槽：噪声化的圆环 + 初始六边形高亮区域
+
+const hitEffects = Fn(() => {
+  const normPos = positionLocal.normalize();
+  // 圆环贡献值
+  const ringContrib = float(0.0).toVar();
+  // 六边形增强值
+  const hexHitBoost = float(0.0).toVar();
+
+  Loop(MAX_HITS, ({i}) => {
+    const ht = uHitTime.element(i);
+    const hp = uHitPos.element(i);
+    const elapsed = uTime.sub(ht);
+
+    // 表示是否处于动画状态
+    const isActive = mul(
+      ht.step(0),
+      elapsed.step(0),
+      uHitDuration.step(elapsed),
+    );
+
+    // 沿球面计算的最短距离（弧度）
+    const dist = acos(clamp(dot(normPos, hp.normalize()), -1, 1));
+
+    // 扩展圆环 - 在 uHitMaxRadius 地方截断，在到达时渐隐
+    // 环半径，随时间扩大，不超过 uHitMaxRadius
+    const ringR = min(elapsed.mul(uHitRingSpeed), uHitMaxRadius);
+    const noiseD = mx_noise_float(normPos.mul(5).add(vec3(elapsed.mul(2)))).mul(
+      0.05,
+    );
+    // 在圆环上时，ring 为 1
+    const ring = abs(dist.add(noiseD).sub(ringR))
+      .smoothstep(0, uHitRingWidth)
+      .oneMinus();
+    // 持续时间超过一半时开始隐藏
+    const fade = elapsed
+      .smoothstep(uHitDuration.mul(0.5), uHitDuration)
+      .oneMinus();
+    // 弧度超过 75% 时开始隐藏
+    const radialFade = ringR
+      .smoothstep(uHitMaxRadius.mul(0.75), uHitMaxRadius)
+      .oneMinus();
+    ringContrib.addAssign(mul(ring, fade, radialFade, isActive));
+
+    // 高亮六边形：在受击区域内的六边形高亮
+    // 在受击区域内是 1-0
+    const zone = dist.smoothstep(0, uHitImpactRadius).oneMinus();
+    // 在持续时间的35%内是 1-0
+    const zoneFade = elapsed.smoothstep(0, uHitDuration.mul(0.35)).oneMinus();
+    hexHitBoost.addAssign(mul(zone, zoneFade, isActive));
+  });
+
+  ringContrib.minAssign(2.0);
+  hexHitBoost.minAssign(1.0);
+
+  return vec2(ringContrib, hexHitBoost);
+})();
+
+const ringContrib = hitEffects.x;
+const hexHitBoost = hitEffects.y;
+
+// 生效的六边形透明度
+const effectiveHexOpacity = mul(
+  uHexOpacity.add(hexHitBoost.mul(uHitIntensity)),
+  uShowHex,
+);
+
 const intensity = add(
-  hex.mul(uHexOpacity).mul(float(0.3).add(fresnel.mul(0.7))), // 让边缘的六边形更亮
+  hex.mul(effectiveHexOpacity).mul(float(0.3).add(fresnel.mul(0.7))), // 让边缘的六边形更亮
   fresnel.mul(0.4), // 再加入 fresnel 辉光
-  flash,
+  flash.mul(uShowHex),
 );
 
 const shieldColor = add(
   lColor.mul(intensity).mul(2),
   lColor.mul(uFlowIntensity).mul(flowNoise).mul(fresnel),
+  lColor.mul(ringContrib).mul(uHitIntensity),
 );
 
 const alpha = add(
@@ -175,10 +287,27 @@ const material = new THREE.MeshBasicNodeMaterial({
   opacityNode: alpha,
   transparent: true,
 });
+
+const {onRender} = useLoop();
+onRender(() => {
+  uTime.value = performance.now() / 1000;
+});
+
+let hitIndex = 0;
+
+function handleClick(e: PointerEvent<MouseEvent>) {
+  const localPoint = e.object.worldToLocal(e.point.clone());
+
+  const idx = hitIndex % MAX_HITS;
+  hitIndex++;
+
+  hitPositions[idx]!.copy(localPoint);
+  hitTimes[idx] = performance.now() / 1000;
+}
 </script>
 
 <template>
-  <TresMesh :material="material" :position-y="1.8">
+  <TresMesh :material="material" :position-y="1.8" @click="handleClick">
     <TresSphereGeometry :args="[1.8, 64, 64]" />
   </TresMesh>
 </template>
