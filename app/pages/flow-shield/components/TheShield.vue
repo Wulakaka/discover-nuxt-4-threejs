@@ -32,7 +32,13 @@ import {MAX_HITS} from "../const";
 
 const inspector = inject(INSPECTOR_KEY);
 
-const gui = inspector?.createParameters("Params");
+const gui = inspector?.createParameters("Force Shield");
+
+const manualReveal = ref(false);
+
+const revealProgress = ref(1);
+
+const revealSpeed = ref(3.5);
 
 const uTime = uniform(performance.now() / 1000);
 
@@ -60,7 +66,7 @@ const {
 
 const uShowHex = uniform(true);
 
-const uReveal = uniform(0.5);
+const uReveal = uniform(1);
 const uFlowSpeed = uniform(1.13);
 const uFlowScale = uniform(2.4);
 const uFlowIntensity = uniform(4.0);
@@ -69,6 +75,9 @@ const uNoiseEdgeColor = uniform(new THREE.Color("#26aeff"));
 const uNoiseEdgeWidth = uniform(0.02);
 const uNoiseEdgeIntensity = uniform(10);
 const uNoiseEdgeSmoothness = uniform(0.5);
+
+const uOpacity = uniform(0.75);
+const uFadeStart = uniform(0);
 
 const hitPositions = Array.from(
   {
@@ -91,10 +100,14 @@ const uHitIntensity = uniform(4.1);
 const uHitImpactRadius = uniform(0.3);
 const hitDamage = ref(5);
 
-gui?.add(uReveal, "value", 0, 1, 0.01).name("Reveal");
+gui?.add(manualReveal, "value").name("Manual Reveal");
+gui?.add(revealProgress, "value", 0, 1, 0.01).name("↳ Reveal Progress");
 gui?.addColor(uColor, "value").name("Sphere Color");
 gui?.add(uFresnelPower, "value", 0.5, 5, 0.1).name("Fresnel Power");
 gui?.add(uFresnelStrength, "value", 0, 3, 0.05).name("Fresnel Strength");
+gui?.add(uOpacity, "value", 0, 1, 0.01).name("Opacity");
+gui?.add(uFadeStart, "value", -1, 1, 0.01).name("Fade Start");
+gui?.add(revealSpeed, "value", 0.5, 5, 0.1).name("Reveal Speed");
 gui?.add(uHexScale, "value", 1, 20, 0.5).name("Hex Scale");
 gui?.add(uHexOpacity, "value", 0, 1, 0.01).name("Hex Opacity");
 gui?.add(uShowHex, "value").name("Show Hex");
@@ -301,10 +314,14 @@ const shieldColor = add(
 const edgeColor = mix(uNoiseEdgeColor, lColor, uLife.oneMinus());
 const edgeGlow = mul(edgeColor, revealEdge, uNoiseEdgeIntensity);
 
+const normY = positionLocal.y.div(1.8);
+
 const alpha = add(
-  intensity.mul(revealMask), // 溶解效果
+  mul(intensity, revealMask, uOpacity), // 溶解效果
   revealEdge.mul(uNoiseEdgeIntensity), // 溶解边缘
-).clamp();
+)
+  .clamp()
+  .mul(normY.smoothstep(-1, uFadeStart));
 
 const material = new THREE.MeshBasicNodeMaterial({
   colorNode: shieldColor.add(edgeGlow),
@@ -313,8 +330,21 @@ const material = new THREE.MeshBasicNodeMaterial({
 });
 
 const {onRender} = useLoop();
-onRender(() => {
+onRender(({delta}) => {
   uTime.value = performance.now() / 1000;
+
+  if (manualReveal.value) {
+    uReveal.value = revealProgress.value;
+  } else {
+    const target = 0;
+    uReveal.value = THREE.MathUtils.lerp(
+      uReveal.value,
+      target,
+      1 - Math.exp(-revealSpeed.value * delta),
+    );
+    if (uReveal.value < 0.005) uReveal.value = 0;
+    if (uReveal.value > 0.995) uReveal.value = 1;
+  }
 });
 
 let hitIndex = 0;
