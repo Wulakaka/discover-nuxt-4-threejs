@@ -5,7 +5,7 @@ import type {TresRendererSetupContext} from "@tresjs/core";
 import {WebGPURenderer, NoToneMapping} from "three/webgpu";
 
 import TheShield from "../components/TheShield.vue";
-import TheGrid from "../../../components/TheGrid.vue";
+import TheReflectiveGrid from "../components/TheReflectiveGrid.vue";
 import {Inspector} from "three/addons/inspector/Inspector.js";
 import {INSPECTOR_KEY} from "../INJECTION_KEYS.js";
 
@@ -38,11 +38,7 @@ const createWebGPURenderer = (ctx: TresRendererSetupContext) => {
     <OrbitControls />
     <TresAmbientLight :intensity="0.4" />
     <TresDirectionalLight :position="[5, 8, 3]" :intensity="1.5" cast-shadow />
-    <TheGrid />
-    <!-- <TresMesh>
-      <TresSphereGeometry :args="[1.8, 64, 64]" />
-      <TresMeshStandardMaterial color="red" />
-    </TresMesh> -->
+    <TheReflectiveGrid />
     <TheShield />
   </TresCanvas>
 </template>
