@@ -8,6 +8,7 @@ import {
   smoothstep,
   uniform,
   uv,
+  vec2,
 } from "three/tsl";
 
 import {INSPECTOR_KEY} from "../INJECTION_KEYS";
@@ -87,9 +88,13 @@ const gridColorNode = uGridColor.mul(grid).mul(radialFade).mul(uGridIntensity);
 reflection.biasNode = uReflectionBlur.mul(8);
 const reflectedGround = mix(uGroundColor, reflection.rgb, uReflectivity);
 
+const alpha = uv().distance(vec2(0.5)).smoothstep(0.48, 0.5).oneMinus();
+
 const material = new THREE.MeshBasicNodeMaterial({
   colorNode: reflectedGround.add(gridColorNode),
   side: THREE.DoubleSide,
+  transparent: true,
+  opacityNode: alpha,
 });
 
 onBeforeUnmount(() => {
